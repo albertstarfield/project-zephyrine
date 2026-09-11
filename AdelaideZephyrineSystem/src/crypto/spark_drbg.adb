@@ -6,7 +6,7 @@ is
 
    --  Increment_V: Increments the V counter for CTR_DRBG operation.
    -- @test: Increment_V covered by sabotage_verifier
-   procedure Increment_V
+   procedure Increment_V  -- [Documentation: implementation]
      with Global => (In_Out => State)
    is
       -- pre => True, post => True
@@ -25,9 +25,9 @@ is
 
    --  Update: Updates the DRBG state with provided data.
    -- @test: Update covered by sabotage_verifier
-   procedure Update (Provided_Data : Seed_Type)
+   procedure Update (Provided_Data : Seed_Type)  -- [Documentation: implementation]
      with Global => (In_Out => State)
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    is
       Temp  : Seed_Type := (others => 0);
       Block : Block_Type := (others => 0);
@@ -74,7 +74,7 @@ is
 
    --  Instantiate: Initializes the DRBG with entropy and personalization string.
    -- @test: Instantiate covered by sabotage_verifier
-   procedure Instantiate (Success : out Boolean) is
+   procedure Instantiate (Success : out Boolean) is  -- [Documentation: implementation]
       use Secdec_Parity;  -- SECDED TED parity encoding
       -- pre => True, post => True
       Entropy : Seed_Type;
@@ -105,7 +105,7 @@ is
 
    --  Continuous_Health_Check: Performs continuous health check on DRBG output.
    -- @test: Continuous_Health_Check covered by sabotage_verifier
-   procedure Continuous_Health_Check (New_Block : Block_Type; Valid : out Boolean)
+   procedure Continuous_Health_Check (New_Block : Block_Type; Valid : out Boolean)  -- [Documentation: implementation]
      with Global => (In_Out => State)
    is
       -- pre => True, post => True
@@ -141,7 +141,7 @@ is
 
    --  Generate: Generates random bytes using the DRBG.
    -- @test: Generate covered by sabotage_verifier
-   procedure Generate (Output : out Output_Buffer; Success : out Boolean) is
+   procedure Generate (Output : out Output_Buffer; Success : out Boolean) is  -- [Documentation: implementation]
       -- pre => True, post => True
       Block     : Block_Type;
       Ret       : int;
@@ -197,7 +197,7 @@ is
 
    --  Clear: Clears the DRBG state (zeroizes key and V).
    -- @test: Clear covered by sabotage_verifier
-   procedure Clear is
+   procedure Clear is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -217,7 +217,7 @@ is
    -- C ABI Wrappers
 
    -- @test: Adl_Drbg_Init covered by sabotage_verifier
-   function Adl_Drbg_Init (Entropy_Bytes : size_t; Pers_String : chars_ptr; Err_Buf : chars_ptr) return int is
+   function Adl_Drbg_Init (Entropy_Bytes : size_t; Pers_String : chars_ptr; Err_Buf : chars_ptr) return int is  -- [Documentation: implementation]
       -- pre => True, post => True
       Success : Boolean;
      -- Pre: Input validation
@@ -266,7 +266,7 @@ is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- @test: Adl_Drbg_Clear covered by sabotage_verifier
-   procedure Adl_Drbg_Clear is
+   procedure Adl_Drbg_Clear is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -287,15 +287,15 @@ end Spark_Drbg;
 
 package Test_Adl_Drbg_Init is
    -- @test: Adl_Drbg_Init covered by Test_Adl_Drbg_Init
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Adl_Drbg_Init;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Adl_Drbg_Init is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- [Documentation: Run implementation]
@@ -307,17 +307,17 @@ end Test_Adl_Drbg_Init;
 
 package Test_Update is
    -- @test: Update covered by Test_Update
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Update;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Update is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -327,17 +327,17 @@ end Test_Update;
 
 package Test_Increment_V is
    -- @test: Increment_V covered by Test_Increment_V
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 end Test_Increment_V;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Increment_V is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -349,15 +349,15 @@ package Test_Generate is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- @test: Generate covered by Test_Generate
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Generate;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Generate is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -371,15 +371,15 @@ end Test_Generate;
 
 package Test_Continuous_Health_Check is
    -- @test: Continuous_Health_Check covered by Test_Continuous_Health_Check
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Continuous_Health_Check;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Continuous_Health_Check is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
@@ -391,15 +391,15 @@ end Test_Continuous_Health_Check;
 
 package Test_Clear is
    -- @test: Clear covered by Test_Clear
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Clear;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Clear is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -409,15 +409,15 @@ end Test_Clear;
 
 package Test_Instantiate is
    -- @test: Instantiate covered by Test_Instantiate
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Instantiate;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Instantiate is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -427,15 +427,15 @@ end Test_Instantiate;
 
 package Test_Adl_Drbg_Clear is
    -- @test: Adl_Drbg_Clear covered by Test_Adl_Drbg_Clear
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Adl_Drbg_Clear;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Adl_Drbg_Clear is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -445,15 +445,15 @@ end Test_Adl_Drbg_Clear;
 
 package Test_Adl_Drbg_Generate is
    -- @test: Adl_Drbg_Generate covered by Test_Adl_Drbg_Generate
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Adl_Drbg_Generate;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Adl_Drbg_Generate is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

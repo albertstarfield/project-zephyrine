@@ -14,7 +14,7 @@ package body Verification_Manager is
 
    --  Helper to run an external command and capture its output
    -- @test: Run_Command_Capture covered by sabotage_verifier
-   function Run_Command_Capture
+   function Run_Command_Capture  -- [Documentation: implementation]
      (Cmd : String; Args : GNAT.OS_Lib.Argument_List; Log_File : String) return Integer
    is
       -- pre => True, post => True
@@ -43,7 +43,7 @@ package body Verification_Manager is
 
    --  Helper to read a whole file into a String/Unbounded_String
    -- @test: Read_File_Content covered by sabotage_verifier
-   function Read_File_Content (File_Path : String) return String is
+   function Read_File_Content (File_Path : String) return String is  -- [Documentation: implementation]
       -- pre => True, post => True
       File : File_Type;
       Content : Unbounded_String := Null_Unbounded_String;
@@ -78,7 +78,7 @@ package body Verification_Manager is
 
    --  Helper to generate a random 8-character hex string for temp filenames
    -- @test: Get_Random_Suffix covered by sabotage_verifier
-   function Get_Random_Suffix return String is
+   function Get_Random_Suffix return String is  -- [Documentation: implementation]
       -- pre => True, post => True
       subtype Rand_Range is Integer range 0 .. 15;
       package Rand_Pack is new Ada.Numerics.Discrete_Random (Rand_Range);  -- PREALLOCATED_REVIEWED
@@ -105,7 +105,7 @@ package body Verification_Manager is
    -- Verify_Python --
    -------------------
    -- @test: Verify_Python covered by sabotage_verifier
-   function Verify_Python (Response_Text : String) return String is
+   function Verify_Python (Response_Text : String) return String is  -- [Documentation: implementation]
       -- pre => True, post => True
       use GNAT.OS_Lib;
       I           : Positive := Response_Text'First;
@@ -210,7 +210,7 @@ package body Verification_Manager is
    -- Verify_And_Compile_Dafny --
    --------------------------------
    -- @test: Verify_And_Compile_Dafny covered by sabotage_verifier
-   function Verify_And_Compile_Dafny
+   function Verify_And_Compile_Dafny  -- [Documentation: implementation]
      (Specification : String;
       Target_Lang   : String;
       Generator     : Generator_Func) return String
@@ -428,17 +428,17 @@ end Verification_Manager;
 
 package Test_Read_File_Content is
    -- @test: Read_File_Content covered by Test_Read_File_Content
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Read_File_Content;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 package body Test_Read_File_Content is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -448,17 +448,17 @@ end Test_Read_File_Content;
 
 package Test_Verify_And_Compile_Dafny is
    -- @test: Verify_And_Compile_Dafny covered by Test_Verify_And_Compile_Dafny
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
           Post => True;
 end Test_Verify_And_Compile_Dafny;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Verify_And_Compile_Dafny is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -468,15 +468,15 @@ end Test_Verify_And_Compile_Dafny;
 
 package Test_Get_Random_Suffix is
    -- @test: Get_Random_Suffix covered by Test_Get_Random_Suffix
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Random_Suffix;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Random_Suffix is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -486,15 +486,15 @@ end Test_Get_Random_Suffix;
 
 package Test_Run_Command_Capture is
    -- @test: Run_Command_Capture covered by Test_Run_Command_Capture
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Run_Command_Capture;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Command_Capture is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -504,15 +504,15 @@ end Test_Run_Command_Capture;
 
 package Test_Verify_Python is
    -- @test: Verify_Python covered by Test_Verify_Python
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Verify_Python;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Verify_Python is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

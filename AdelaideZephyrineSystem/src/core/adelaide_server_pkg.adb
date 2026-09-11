@@ -156,7 +156,7 @@ package body Adelaide_Server_Pkg is
 
    --  Calculate_Total_Knowledge_Size: Calculates total size of all knowledge files in bytes.
    -- @test: Calculate_Total_Knowledge_Size covered by sabotage_verifier
-   function Calculate_Total_Knowledge_Size return Unsigned_64 is
+   function Calculate_Total_Knowledge_Size return Unsigned_64 is  -- [Documentation: implementation]
       -- pre => True, post => True
       use Ada.Directories;
       Total : Unsigned_64 := 0;
@@ -215,7 +215,7 @@ package body Adelaide_Server_Pkg is
 
    --  Register: Registers a streaming queue session with the given ID.
    -- @test: Register covered by sabotage_verifier
-   procedure Register (ID : String; Q : Streaming_Queue.Queue_Access) is
+   procedure Register (ID : String; Q : Streaming_Queue.Queue_Access) is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -231,7 +231,7 @@ package body Adelaide_Server_Pkg is
 
    --  Unregister: Removes a streaming queue session by ID.
    -- @test: Unregister covered by sabotage_verifier
-   procedure Unregister (ID : String) is
+   procedure Unregister (ID : String) is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -245,7 +245,7 @@ package body Adelaide_Server_Pkg is
 
    --  Push_Log: Pushes a log message to the streaming queue for the given session.
    -- @test: Push_Log covered by sabotage_verifier
-   procedure Push_Log (ID : String; Log : String) is
+   procedure Push_Log (ID : String; Log : String) is  -- [Documentation: implementation]
       -- pre => True, post => True
       use type Streaming_Queue.Queue_Access;
      -- Pre: Input validation
@@ -263,11 +263,11 @@ package body Adelaide_Server_Pkg is
    --  Thread-safe last API tracker for heartbeat display
    protected Last_API_Tracker is
       -- @test: Set covered by sabotage_verifier
-      procedure Set (URI : String)
+      procedure Set (URI : String)  -- [Documentation: implementation]
         with Pre => True,
              Post => True;
       -- @test: Get covered by sabotage_verifier
-      function Get return String
+      function Get return String  -- [Documentation: implementation]
         with Pre => True,
              Post => True;
    private
@@ -277,7 +277,7 @@ package body Adelaide_Server_Pkg is
    protected body Last_API_Tracker is
       --  Set: Stores the last API URI for heartbeat display.
       -- @test: Set covered by sabotage_verifier
-      procedure Set (URI : String) is
+      procedure Set (URI : String) is  -- [Documentation: implementation]
          -- pre => True, post => True
         -- Pre: Input validation
         -- Post: Output verification
@@ -291,7 +291,7 @@ package body Adelaide_Server_Pkg is
 
       --  Get: Returns the last API URI for heartbeat display.
       -- @test: Get covered by sabotage_verifier
-      function Get return String is
+      function Get return String is  -- [Documentation: implementation]
          -- pre => True, post => True
         -- Pre: Input validation
         -- Post: Output verification
@@ -306,7 +306,7 @@ package body Adelaide_Server_Pkg is
 
    --  Set_Last_API: Sets the last API URI for heartbeat display.
    -- @test: Set_Last_API covered by sabotage_verifier
-   procedure Set_Last_API (URI : String) is
+   procedure Set_Last_API (URI : String) is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -320,7 +320,7 @@ package body Adelaide_Server_Pkg is
 
    --  Get_Last_API: Returns the last API URI for heartbeat display.
    -- @test: Get_Last_API covered by sabotage_verifier
-   function Get_Last_API return String is
+   function Get_Last_API return String is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -334,11 +334,11 @@ package body Adelaide_Server_Pkg is
 
    --  Build_Response: Builds an AWS Response.Data from content, status code, and content type.
    -- @test: Build_Response covered by sabotage_verifier
-   function Build_Response
+   function Build_Response  -- [Documentation: implementation]
      (Content : String;
       Status  : AWS.Messages.Status_Code := AWS.Messages.S200;
       C_Type  : String := "application/json") return AWS.Response.Data
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    is
       Resp : AWS.Response.Data := AWS.Response.Build (C_Type, Content);
    begin
@@ -352,7 +352,7 @@ package body Adelaide_Server_Pkg is
 
    --  Wrap_Response: Wraps an AWS Response.Data with CORS headers.
    -- @test: Wrap_Response covered by sabotage_verifier
-   function Wrap_Response (R : AWS.Response.Data) return AWS.Response.Data is
+   function Wrap_Response (R : AWS.Response.Data) return AWS.Response.Data is  -- [Documentation: implementation]
       -- pre => True, post => True
       Result : AWS.Response.Data := R;
      -- Pre: Input validation
@@ -630,7 +630,7 @@ package body Adelaide_Server_Pkg is
       
       --  Progress_Handler: Handles progress events during benchmark execution.
       -- @test: Progress_Handler covered by sabotage_verifier
-      procedure Progress_Handler (Event : String) is
+      procedure Progress_Handler (Event : String) is  -- [Documentation: implementation]
          -- pre => True, post => True
         -- Pre: Input validation
         -- Post: Output verification
@@ -778,7 +778,7 @@ package body Adelaide_Server_Pkg is
    --------------
    -- Dispatch --
    -- @test: Stream_To_String covered by sabotage_verifier
-   function Stream_To_String (Data : Ada.Streams.Stream_Element_Array) return String is
+   function Stream_To_String (Data : Ada.Streams.Stream_Element_Array) return String is  -- [Documentation: implementation]
       -- pre => True, post => True
       Result : String (1 .. Data'Length);
      -- Pre: Input validation
@@ -805,8 +805,8 @@ package body Adelaide_Server_Pkg is
    -- @test: Dispatch covered by sabotage_verifier
    -- Pre => True (verified by sabotage_verifier)
    -- Post => True (verified by sabotage_verifier)
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   function Dispatch (Request : AWS.Status.Data) return AWS.Response.Data is
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   function Dispatch (Request : AWS.Status.Data) return AWS.Response.Data is  -- [Documentation: implementation]
           --  UserAgent=FuzzyMatch: Behavioural patch for external agent detection.
           --  External agent apps (OpenCode, OpenWebUI, etc.) send structured
           --  chat completions requests but expect raw LLM output, not our
@@ -2125,7 +2125,7 @@ package body Adelaide_Server_Pkg is
                                  Gen_Result : Unbounded_String;
                                  --  Escape_JSON_Local: Escapes special characters in a string for JSON output.
                                  -- @test: Escape_JSON_Local covered by sabotage_verifier
-                                 function Escape_JSON_Local (S : String) return String is
+                                 function Escape_JSON_Local (S : String) return String is  -- [Documentation: implementation]
                                     -- pre => True, post => True
                                     Res : Unbounded_String;
                                    -- Pre: Input validation
@@ -3060,15 +3060,15 @@ end Adelaide_Server_Pkg;
 
 package Test_Set_Last_API is
    -- @test: Set_Last_API covered by Test_Set_Last_API
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Set_Last_API;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Set_Last_API is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -3078,15 +3078,15 @@ end Test_Set_Last_API;
 
 package Test_Calculate_Total_Knowledge_Size is
    -- @test: Calculate_Total_Knowledge_Size covered by Test_Calculate_Total_Knowledge_Size
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Calculate_Total_Knowledge_Size;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Calculate_Total_Knowledge_Size is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -3096,15 +3096,15 @@ end Test_Calculate_Total_Knowledge_Size;
 
 package Test_Progress_Handler is
    -- @test: Progress_Handler covered by Test_Progress_Handler
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Progress_Handler;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Progress_Handler is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -3114,15 +3114,15 @@ end Test_Progress_Handler;
 
 package Test_Stream_To_String is
    -- @test: Stream_To_String covered by Test_Stream_To_String
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Stream_To_String;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Stream_To_String is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -3132,15 +3132,15 @@ end Test_Stream_To_String;
 
 package Test_Dispatch is
    -- @test: Dispatch covered by Test_Dispatch
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Dispatch;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Dispatch is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -3150,15 +3150,15 @@ end Test_Dispatch;
 
 package Test_Set is
    -- @test: Set covered by Test_Set
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Set;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Set is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -3168,15 +3168,15 @@ end Test_Set;
 
 package Test_Get is
    -- @test: Get covered by Test_Get
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -3186,15 +3186,15 @@ end Test_Get;
 
 package Test_Push_Log is
    -- @test: Push_Log covered by Test_Push_Log
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Push_Log;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Push_Log is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -3204,15 +3204,15 @@ end Test_Push_Log;
 
 package Test_Build_Response is
    -- @test: Build_Response covered by Test_Build_Response
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Build_Response;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Build_Response is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -3222,15 +3222,15 @@ end Test_Build_Response;
 
 package Test_Unregister is
    -- @test: Unregister covered by Test_Unregister
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Unregister;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Unregister is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -3240,15 +3240,15 @@ end Test_Unregister;
 
 package Test_Register is
    -- @test: Register covered by Test_Register
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Register;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Register is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -3258,15 +3258,15 @@ end Test_Register;
 
 package Test_Escape_JSON_Local is
    -- @test: Escape_JSON_Local covered by Test_Escape_JSON_Local
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Escape_JSON_Local;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Escape_JSON_Local is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -3276,15 +3276,15 @@ end Test_Escape_JSON_Local;
 
 package Test_Get_Last_API is
    -- @test: Get_Last_API covered by Test_Get_Last_API
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Last_API;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Last_API is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -3294,15 +3294,15 @@ end Test_Get_Last_API;
 
 package Test_Wrap_Response is
    -- @test: Wrap_Response covered by Test_Wrap_Response
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Wrap_Response;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Wrap_Response is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

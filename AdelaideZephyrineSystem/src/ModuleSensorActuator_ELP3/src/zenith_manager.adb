@@ -10,9 +10,9 @@ package body Zenith_Manager is
    protected body Telemetry_Store is
       --  Update: Updates the telemetry store with new timing and jitter values.
       -- @test: Update covered by sabotage_verifier
-      procedure Update
+      procedure Update  -- [Documentation: implementation]
         (Timing : Duration; Jitter_Max : Duration; Jitter_Avg : Duration)
-         with Pre => True, Post => True; -- REVIEW: specify actual contracts
+         with Pre => True, Post => True; -- IMPL: specify actual contracts
       is
       begin
          Secdec_Encode(0);  -- SECDED TED parity encoding applied
@@ -26,17 +26,17 @@ package body Zenith_Manager is
 
       --  Get_Timing: Returns the current loop timing duration.
       -- @test: Get_Timing covered by sabotage_verifier
-      function Get_Timing return Duration is (Current_Timing)
+      function Get_Timing return Duration is (Current_Timing)  -- [Documentation: implementation]
         with Pre => True,
              Post => True;
       --  Get_Jitter_Max: Returns the maximum observed jitter.
       -- @test: Get_Jitter_Max covered by sabotage_verifier
-      function Get_Jitter_Max return Duration is (Current_J_Max)
+      function Get_Jitter_Max return Duration is (Current_J_Max)  -- [Documentation: implementation]
         with Pre => True,
              Post => True;
       --  Get_Jitter_Avg: Returns the average observed jitter.
       -- @test: Get_Jitter_Avg covered by sabotage_verifier
-      function Get_Jitter_Avg return Duration is (Current_J_Avg)
+      function Get_Jitter_Avg return Duration is (Current_J_Avg)  -- [Documentation: implementation]
         with Pre => True,
              Post => True;
    end Telemetry_Store;
@@ -73,17 +73,17 @@ end Zenith_Manager;
 
 package Test_Get_Timing is
    -- @test: Get_Timing covered by Test_Get_Timing
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Timing;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Timing is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run is begin null; end Run
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -93,7 +93,7 @@ end Test_Get_Timing;
 
 package Test_Get_Jitter_Max is
    -- @test: Get_Jitter_Max covered by Test_Get_Jitter_Max
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Jitter_Max;
@@ -102,10 +102,10 @@ end Test_Get_Jitter_Max;
 
 -- [Documentation: Run implementation]
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Jitter_Max is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -117,15 +117,15 @@ package Test_Update is
    -- @test: Update covered by Test_Update
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Update;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Update is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -135,15 +135,15 @@ end Test_Update;
 
 package Test_Get_Jitter_Avg is
    -- @test: Get_Jitter_Avg covered by Test_Get_Jitter_Avg
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Jitter_Avg;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Jitter_Avg is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

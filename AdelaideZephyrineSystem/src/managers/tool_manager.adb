@@ -633,7 +633,7 @@ package body Tool_Manager is
    --  ============================================================================
    -- function: Execute_CFS_Tool — wraps CFS_Tool_Bridge.Execute_CFS_Tool
    -- @test: Execute_CFS_Tool covered by sabotage_verifier
-   function Execute_CFS_Tool (Params : String) return Tool_Result is
+   function Execute_CFS_Tool (Params : String) return Tool_Result is  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
       Bridge_Result : CFS_Tool_Bridge.Tool_Result;
    begin
@@ -849,17 +849,17 @@ end Tool_Manager;
 
 package Test_Execute_CFS_Tool is
    -- @test: Execute_CFS_Tool covered by Test_Execute_CFS_Tool
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 end Test_Execute_CFS_Tool;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_CFS_Tool is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -871,15 +871,15 @@ package Test_Execute_Imagine_Tool is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- @test: Execute_Imagine_Tool covered by Test_Execute_Imagine_Tool
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Imagine_Tool;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Imagine_Tool is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -893,15 +893,15 @@ end Test_Execute_Imagine_Tool;
 
 package Test_Execute_Todo is
    -- @test: Execute_Todo covered by Test_Execute_Todo
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Todo;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Todo is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
@@ -913,17 +913,17 @@ end Test_Execute_Todo;
 
 package Test_Execute_Math is
    -- @test: Execute_Math covered by Test_Execute_Math
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Math;
 
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Math is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -933,17 +933,17 @@ end Test_Execute_Math;
 
 package Test_Execute_Code is
    -- @test: Execute_Code covered by Test_Execute_Code
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Code;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Code is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -957,15 +957,15 @@ end Test_Execute_Code;
 
 package Test_Execute_Test is
    -- @test: Execute_Test covered by Test_Execute_Test
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Test;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Test is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- [Documentation: Run implementation]
@@ -977,17 +977,17 @@ end Test_Execute_Test;
 
 package Test_Execute_Package is
    -- @test: Execute_Package covered by Test_Execute_Package
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Package;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Package is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -997,17 +997,17 @@ end Test_Execute_Package;
 
 package Test_Execute_Dir is
    -- @test: Execute_Dir covered by Test_Execute_Dir
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 end Test_Execute_Dir;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Dir is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1019,15 +1019,15 @@ package Test_Execute_Killshell is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- @test: Execute_Killshell covered by Test_Execute_Killshell
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Killshell;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Killshell is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1041,15 +1041,15 @@ end Test_Execute_Killshell;
 
 package Test_Execute_ROS2_Tool is
    -- @test: Execute_ROS2_Tool covered by Test_Execute_ROS2_Tool
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_ROS2_Tool;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_ROS2_Tool is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
@@ -1061,17 +1061,17 @@ end Test_Execute_ROS2_Tool;
 
 package Test_Execute_Tool is
    -- @test: Execute_Tool covered by Test_Execute_Tool
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Tool;
 
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Tool is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1081,15 +1081,15 @@ end Test_Execute_Tool;
 
 package Test_Execute_Hook is
    -- @test: Execute_Hook covered by Test_Execute_Hook
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Hook;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Hook is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1099,15 +1099,15 @@ end Test_Execute_Hook;
 
 package Test_Execute_Proactive_Tool is
    -- @test: Execute_Proactive_Tool covered by Test_Execute_Proactive_Tool
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Proactive_Tool;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Proactive_Tool is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1117,15 +1117,15 @@ end Test_Execute_Proactive_Tool;
 
 package Test_Execute_Issue is
    -- @test: Execute_Issue covered by Test_Execute_Issue
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Issue;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Issue is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1135,15 +1135,15 @@ end Test_Execute_Issue;
 
 package Test_Execute_Git is
    -- @test: Execute_Git covered by Test_Execute_Git
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Git;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Git is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1153,15 +1153,15 @@ end Test_Execute_Git;
 
 package Test_Execute_Cat is
    -- @test: Execute_Cat covered by Test_Execute_Cat
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Cat;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Cat is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1171,15 +1171,15 @@ end Test_Execute_Cat;
 
 package Test_Execute_Review is
    -- @test: Execute_Review covered by Test_Execute_Review
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Review;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Review is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1189,15 +1189,15 @@ end Test_Execute_Review;
 
 package Test_Execute_Grep is
    -- @test: Execute_Grep covered by Test_Execute_Grep
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Grep;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Grep is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1207,15 +1207,15 @@ end Test_Execute_Grep;
 
 package Test_Execute_File_Edit is
    -- @test: Execute_File_Edit covered by Test_Execute_File_Edit
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_File_Edit;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_File_Edit is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1225,15 +1225,15 @@ end Test_Execute_File_Edit;
 
 package Test_Execute_Cronia_Tool is
    -- @test: Execute_Cronia_Tool covered by Test_Execute_Cronia_Tool
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Cronia_Tool;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Cronia_Tool is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

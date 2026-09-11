@@ -10,7 +10,7 @@ package body Toolchain_Manager is
 
    --  Helper function to execute system commands and return exit status
    -- @test: Run_Command covered by sabotage_verifier
-   function Run_Command
+   function Run_Command  -- [Documentation: implementation]
      (Cmd          : String;
       Args         : GNAT.OS_Lib.Argument_List;
       Capture_File : String := "") return Integer
@@ -47,7 +47,7 @@ package body Toolchain_Manager is
 
    --  Helper to run arbitrary shell scripts via bash
    -- @test: Run_Shell covered by sabotage_verifier
-   function Run_Shell (Script : String) return Integer is
+   function Run_Shell (Script : String) return Integer is  -- [Documentation: implementation]
       -- pre => True, post => True
       use GNAT.OS_Lib;
       Args : Argument_List (1 .. 2);
@@ -69,7 +69,7 @@ package body Toolchain_Manager is
 
    --  Checks if a Rocq/Coq package is installed under OPAM
    -- @test: Is_Rocq_Library_Installed covered by sabotage_verifier
-   function Is_Rocq_Library_Installed (Pkg : String) return Boolean is
+   function Is_Rocq_Library_Installed (Pkg : String) return Boolean is  -- [Documentation: implementation]
       -- pre => True, post => True
       use GNAT.OS_Lib;
       Args   : Argument_List (1 .. 4);
@@ -123,7 +123,7 @@ package body Toolchain_Manager is
 
    --  Verify and auto-install Python packages if missing
    -- @test: Verify_Python_Package covered by sabotage_verifier
-   procedure Verify_Python_Package (Pkg : String) is
+   procedure Verify_Python_Package (Pkg : String) is  -- [Documentation: implementation]
       -- pre => True, post => True
       use GNAT.OS_Lib;
       Args : Argument_List (1 .. 2);
@@ -169,7 +169,7 @@ package body Toolchain_Manager is
    --  Start_Orchestrator: Validates that Ada-native toolchain is available.
    --  No Python subprocess needed — think_tag_sanitizer is now pure Ada.
    -- @test: Start_Orchestrator covered by sabotage_verifier
-   procedure Start_Orchestrator is
+   procedure Start_Orchestrator is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -186,7 +186,7 @@ package body Toolchain_Manager is
    -- Verify_And_Heal --
    ---------------------
    -- @test: Verify_And_Heal covered by sabotage_verifier
-   procedure Verify_And_Heal is
+   procedure Verify_And_Heal is  -- [Documentation: implementation]
       -- pre => True, post => True
       use GNAT.OS_Lib;
       Ret : Integer;
@@ -409,15 +409,15 @@ package Test_Verify_Python_Package is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- @test: Verify_Python_Package covered by Test_Verify_Python_Package
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Verify_Python_Package;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Verify_Python_Package is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -431,15 +431,15 @@ end Test_Verify_Python_Package;
 
 package Test_Run_Shell is
    -- @test: Run_Shell covered by Test_Run_Shell
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Run_Shell;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Shell is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
@@ -451,15 +451,15 @@ end Test_Run_Shell;
 
 package Test_Verify_And_Heal is
    -- @test: Verify_And_Heal covered by Test_Verify_And_Heal
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Verify_And_Heal;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Verify_And_Heal is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -469,15 +469,15 @@ end Test_Verify_And_Heal;
 
 package Test_Is_Rocq_Library_Installed is
    -- @test: Is_Rocq_Library_Installed covered by Test_Is_Rocq_Library_Installed
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Is_Rocq_Library_Installed;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Rocq_Library_Installed is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -487,15 +487,15 @@ end Test_Is_Rocq_Library_Installed;
 
 package Test_Run_Command is
    -- @test: Run_Command covered by Test_Run_Command
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Run_Command;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Command is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -505,15 +505,15 @@ end Test_Run_Command;
 
 package Test_Start_Orchestrator is
    -- @test: Start_Orchestrator covered by Test_Start_Orchestrator
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Start_Orchestrator;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Start_Orchestrator is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

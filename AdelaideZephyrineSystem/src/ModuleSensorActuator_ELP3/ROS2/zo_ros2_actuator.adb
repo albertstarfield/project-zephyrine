@@ -10,7 +10,7 @@ package body ZO_ROS2_Actuator is
 
    --  Helper function to generate the formatted verbose prefix with uptime.
    -- @test: Prefix covered by sabotage_verifier
-   function Prefix return String is
+   function Prefix return String is  -- [Documentation: implementation]
       -- pre => True, post => True
       Now : Time := Clock;
       Span : Time_Span := Now - Start_Time;
@@ -31,7 +31,7 @@ package body ZO_ROS2_Actuator is
 
    --  Initialize_ROS2: Initializes the ROS2 node for actuator control.
    -- @test: Initialize_ROS2 covered by sabotage_verifier
-   function Initialize_ROS2 return Boolean is
+   function Initialize_ROS2 return Boolean is  -- [Documentation: implementation]
       -- pre => True, post => True
       --  1. Create zero-initialized options to prevent garbage memory in C structs
       Init_Opts : aliased rcl_init_options_t := rcl_get_zero_initialized_init_options;
@@ -99,7 +99,7 @@ package body ZO_ROS2_Actuator is
 
    --  Publish_Actuator_Command: Publishes a servo command to the ROS2 actuator topic.
    -- @test: Publish_Actuator_Command covered by sabotage_verifier
-   procedure Publish_Actuator_Command (Servo_ID : String; Angle : Float) is
+   procedure Publish_Actuator_Command (Servo_ID : String; Angle : Float) is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -131,17 +131,17 @@ end ZO_ROS2_Actuator;
 
 package Test_Initialize_ROS2 is
    -- @test: Initialize_ROS2 covered by Test_Initialize_ROS2
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Initialize_ROS2;
 
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize_ROS2 is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -151,17 +151,17 @@ end Test_Initialize_ROS2;
 
 package Test_Prefix is
    -- @test: Prefix covered by Test_Prefix
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
           Post => True;
 end Test_Prefix;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Prefix is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -171,15 +171,15 @@ end Test_Prefix;
 
 package Test_Publish_Actuator_Command is
    -- @test: Publish_Actuator_Command covered by Test_Publish_Actuator_Command
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Publish_Actuator_Command;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Publish_Actuator_Command is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

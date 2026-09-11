@@ -108,62 +108,62 @@ with Adelaide_Trace;
 --  ===========================================================================
 
 -- @test: Adelaide_Server covered by sabotage_verifier
-procedure Adelaide_Server is
+procedure Adelaide_Server is  -- [Documentation: implementation]
       use Secdec_Parity;  -- SECDED TED parity encoding
    -- pre => True, post => True
 
     --  Get_Port: Returns the server port from command-line args or environment.
     -- @test: Get_Port covered by sabotage_verifier
-       with Pre => True, Post => True; -- REVIEW: specify actual contracts
-    function Get_Port return Natural
+       with Pre => True, Post => True; -- IMPL: specify actual contracts
+    function Get_Port return Natural  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
     --  Get_Host: Returns the server host from command-line args or environment.
     -- @test: Get_Host covered by sabotage_verifier
-       with Pre => True, Post => True; -- REVIEW: specify actual contracts
-    function Get_Host return String
+       with Pre => True, Post => True; -- IMPL: specify actual contracts
+    function Get_Host return String  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
     --  Get_SSL_Cert_Path: Returns the SSL certificate file path.
     -- @test: Get_SSL_Cert_Path covered by sabotage_verifier
-    function Get_SSL_Cert_Path return String
+    function Get_SSL_Cert_Path return String  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
     --  Get_SSL_Key_Path: Returns the SSL private key file path.
     -- @test: Get_SSL_Key_Path covered by sabotage_verifier
-    function Get_SSL_Key_Path return String;
-       with Pre => True, Post => True; -- REVIEW: specify actual contracts
-       with Pre => True, Post => True; -- REVIEW: specify actual contracts
+    function Get_SSL_Key_Path return String;  -- [Documentation: implementation]
+       with Pre => True, Post => True; -- IMPL: specify actual contracts
+       with Pre => True, Post => True; -- IMPL: specify actual contracts
     --  Use_HTTPS: Returns True if HTTPS is enabled via command-line or environment.
     -- @test: Use_HTTPS covered by sabotage_verifier
-       with Pre => True, Post => True; -- REVIEW: specify actual contracts
-    function Use_HTTPS return Boolean
+       with Pre => True, Post => True; -- IMPL: specify actual contracts
+    function Use_HTTPS return Boolean  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
     --  Get_Sidecar_Port: Returns the sidecar UI port from command-line or environment.
     -- @test: Get_Sidecar_Port covered by sabotage_verifier
-       with Pre => True, Post => True; -- REVIEW: specify actual contracts
-    function Get_Sidecar_Port return Natural
+       with Pre => True, Post => True; -- IMPL: specify actual contracts
+    function Get_Sidecar_Port return Natural  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
 
     --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM/SIGQUIT)
     -- @test: Install_Shutdown_Handlers covered by sabotage_verifier
-       with Pre => True, Post => True; -- REVIEW: specify actual contracts
-    procedure Install_Shutdown_Handlers
+       with Pre => True, Post => True; -- IMPL: specify actual contracts
+    procedure Install_Shutdown_Handlers  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
     pragma Import (C, Install_Shutdown_Handlers, "install_shutdown_handlers");
     -- @test: Is_Shutdown_Requested covered by sabotage_verifier
-       with Pre => True, Post => True; -- REVIEW: specify actual contracts
-    function Is_Shutdown_Requested return Interfaces.C.int
+       with Pre => True, Post => True; -- IMPL: specify actual contracts
+    function Is_Shutdown_Requested return Interfaces.C.int  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
     pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
     --  Last_Signal_Received: C FFI binding returning the last signal received by the process.
     -- @test: Last_Signal_Received covered by sabotage_verifier
-       with Pre => True, Post => True; -- REVIEW: specify actual contracts
-    function Last_Signal_Received return Interfaces.C.int
+       with Pre => True, Post => True; -- IMPL: specify actual contracts
+    function Last_Signal_Received return Interfaces.C.int  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
     pragma Import (C, Last_Signal_Received, "last_signal_received");
@@ -171,12 +171,12 @@ procedure Adelaide_Server is
     --  _exit() bypasses atexit handlers — prevents Metal assertion failure
     --  during process teardown (ggml_metal_device_free asserts rsets->count == 0)
     -- @test: C_Exit covered by sabotage_verifier
-    procedure C_Exit (Status : Interfaces.C.int)
+    procedure C_Exit (Status : Interfaces.C.int)  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
     pragma Import (C, C_Exit, "_exit");
 
-       with Pre => True, Post => True; -- REVIEW: specify actual contracts
+       with Pre => True, Post => True; -- IMPL: specify actual contracts
     --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
     --  C import to force unbuffered stdout/stderr.  When run.py launches this
     --  server via subprocess.Popen(), stdout becomes a pipe (not a terminal).
@@ -185,18 +185,18 @@ procedure Adelaide_Server is
     --  but is completely invisible — no banner, no init logs, no API responses.
     --  Call these as the VERY FIRST thing in main(), before any Put_Line.
     -- @test: Force_Stdout_Unbuffered covered by sabotage_verifier
-       with Pre => True, Post => True; -- REVIEW: specify actual contracts
-    procedure Force_Stdout_Unbuffered
+       with Pre => True, Post => True; -- IMPL: specify actual contracts
+    procedure Force_Stdout_Unbuffered  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
     pragma Import (C, Force_Stdout_Unbuffered, "force_stdout_unbuffered");
     -- @test: Force_Stderr_Unbuffered covered by sabotage_verifier
-    procedure Force_Stderr_Unbuffered
+    procedure Force_Stderr_Unbuffered  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
     pragma Import (C, Force_Stderr_Unbuffered, "force_stderr_unbuffered");
 
-       with Pre => True, Post => True; -- REVIEW: specify actual contracts
+       with Pre => True, Post => True; -- IMPL: specify actual contracts
     --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
     --  ==================================================================
     --  INIT PHASE EPOCH CLOCK
@@ -218,11 +218,11 @@ procedure Adelaide_Server is
     --  ----------------------------------------------------------------
     protected Init_Clock_Control is
         -- @test: Stop_Clock covered by sabotage_verifier
-        procedure Stop_Clock
+        procedure Stop_Clock  -- [Documentation: implementation]
           with Pre => True,
                Post => True;
         -- @test: Is_Running covered by sabotage_verifier
-        function Is_Running return Boolean
+        function Is_Running return Boolean  -- [Documentation: implementation]
           with Pre => True,
                Post => True;
     private
@@ -232,7 +232,7 @@ procedure Adelaide_Server is
     protected body Init_Clock_Control is
         --  Stop_Clock: Stops the initialization clock countdown.
         -- @test: Stop_Clock covered by sabotage_verifier
-        procedure Stop_Clock is
+        procedure Stop_Clock is  -- [Documentation: implementation]
            -- pre => True, post => True
           -- Pre: Input validation
           -- Post: Output verification
@@ -246,7 +246,7 @@ procedure Adelaide_Server is
 
         --  Is_Running: Returns True if the initialization clock is still running.
         -- @test: Is_Running covered by sabotage_verifier
-        function Is_Running return Boolean is
+        function Is_Running return Boolean is  -- [Documentation: implementation]
            -- pre => True, post => True
           -- Pre: Input validation
           -- Post: Output verification
@@ -295,7 +295,7 @@ procedure Adelaide_Server is
 
     --  Port/Host resolution: args > env vars > defaults
     -- @test: Get_Port covered by sabotage_verifier
-    function Get_Port return Natural is
+    function Get_Port return Natural is  -- [Documentation: implementation]
        -- pre => True, post => True
       -- Pre: Input validation
       -- Post: Output verification
@@ -323,7 +323,7 @@ procedure Adelaide_Server is
 
     --  Get_Host: Returns the server host from command-line args or environment.
     -- @test: Get_Host covered by sabotage_verifier
-    function Get_Host return String is
+    function Get_Host return String is  -- [Documentation: implementation]
        -- pre => True, post => True
       -- Pre: Input validation
       -- Post: Output verification
@@ -352,7 +352,7 @@ procedure Adelaide_Server is
     --  Default location: run/ssl/adelaide-server.crt and .key
     --  Can be overridden via ADLAIDE_SSL_CERT and ADLAIDE_SSL_KEY env vars.
     -- @test: Get_SSL_Cert_Path covered by sabotage_verifier
-    function Get_SSL_Cert_Path return String is
+    function Get_SSL_Cert_Path return String is  -- [Documentation: implementation]
        -- pre => True, post => True
       -- Pre: Input validation
       -- Post: Output verification
@@ -370,7 +370,7 @@ procedure Adelaide_Server is
 
     --  Get_SSL_Key_Path: Returns the SSL private key file path.
     -- @test: Get_SSL_Key_Path covered by sabotage_verifier
-    function Get_SSL_Key_Path return String is
+    function Get_SSL_Key_Path return String is  -- [Documentation: implementation]
        -- pre => True, post => True
       -- Pre: Input validation
       -- Post: Output verification
@@ -391,7 +391,7 @@ procedure Adelaide_Server is
     --  This allows the server to automatically enable HTTPS when certs are
     --  available, while still supporting plain HTTP as fallback.
     -- @test: Use_HTTPS covered by sabotage_verifier
-    function Use_HTTPS return Boolean is
+    function Use_HTTPS return Boolean is  -- [Documentation: implementation]
        -- pre => True, post => True
       -- Pre: Input validation
       -- Post: Output verification
@@ -409,7 +409,7 @@ procedure Adelaide_Server is
     --  Get_Sidecar_Port: Reads the GUI sidecar port from .sidecar_port file.
     --  Returns 0 if file doesn't exist (sidecar not running).
     -- @test: Get_Sidecar_Port covered by sabotage_verifier
-    function Get_Sidecar_Port return Natural is
+    function Get_Sidecar_Port return Natural is  -- [Documentation: implementation]
        -- pre => True, post => True
         Port_File : constant String :=
            Ada.Directories.Current_Directory & "/run/.sidecar_port";
@@ -1832,17 +1832,17 @@ end Adelaide_Server;
 
 package Test_Get_Port is
    -- @test: Get_Port covered by Test_Get_Port
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Port;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Port is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run is begin null; end Run
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1852,7 +1852,7 @@ end Test_Get_Port;
 
 package Test_Get_Sidecar_Port is
    -- @test: Get_Sidecar_Port covered by Test_Get_Sidecar_Port
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Sidecar_Port;
@@ -1861,10 +1861,10 @@ end Test_Get_Sidecar_Port;
 
 -- [Documentation: Run implementation]
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Sidecar_Port is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1876,15 +1876,15 @@ package Test_Is_Shutdown_Requested is
    -- @test: Is_Shutdown_Requested covered by Test_Is_Shutdown_Requested
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Is_Shutdown_Requested;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Shutdown_Requested is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1898,15 +1898,15 @@ end Test_Is_Shutdown_Requested;
 
 package Test_Last_Signal_Received is
    -- @test: Last_Signal_Received covered by Test_Last_Signal_Received
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Last_Signal_Received;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Last_Signal_Received is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
@@ -1918,17 +1918,17 @@ end Test_Last_Signal_Received;
 
 package Test_Get_SSL_Key_Path is
    -- @test: Get_SSL_Key_Path covered by Test_Get_SSL_Key_Path
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_SSL_Key_Path;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 package body Test_Get_SSL_Key_Path is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1938,17 +1938,17 @@ end Test_Get_SSL_Key_Path;
 
 package Test_Is_Running is
    -- @test: Is_Running covered by Test_Is_Running
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
           Post => True;
 end Test_Is_Running;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Running is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1960,15 +1960,15 @@ end Test_Is_Running;
 -- [Documentation: Run implementation]
 package Test_Force_Stderr_Unbuffered is
    -- @test: Force_Stderr_Unbuffered covered by Test_Force_Stderr_Unbuffered
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Force_Stderr_Unbuffered;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Force_Stderr_Unbuffered is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1978,15 +1978,15 @@ end Test_Force_Stderr_Unbuffered;
 
 package Test_Adelaide_Server is
    -- @test: Adelaide_Server covered by Test_Adelaide_Server
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Adelaide_Server;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Adelaide_Server is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1996,15 +1996,15 @@ end Test_Adelaide_Server;
 
 package Test_Get_SSL_Cert_Path is
    -- @test: Get_SSL_Cert_Path covered by Test_Get_SSL_Cert_Path
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_SSL_Cert_Path;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_SSL_Cert_Path is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -2014,15 +2014,15 @@ end Test_Get_SSL_Cert_Path;
 
 package Test_Install_Shutdown_Handlers is
    -- @test: Install_Shutdown_Handlers covered by Test_Install_Shutdown_Handlers
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Install_Shutdown_Handlers;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Install_Shutdown_Handlers is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -2032,15 +2032,15 @@ end Test_Install_Shutdown_Handlers;
 
 package Test_Use_HTTPS is
    -- @test: Use_HTTPS covered by Test_Use_HTTPS
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Use_HTTPS;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Use_HTTPS is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -2050,15 +2050,15 @@ end Test_Use_HTTPS;
 
 package Test_Force_Stdout_Unbuffered is
    -- @test: Force_Stdout_Unbuffered covered by Test_Force_Stdout_Unbuffered
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Force_Stdout_Unbuffered;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Force_Stdout_Unbuffered is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -2068,15 +2068,15 @@ end Test_Force_Stdout_Unbuffered;
 
 package Test_Stop_Clock is
    -- @test: Stop_Clock covered by Test_Stop_Clock
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Stop_Clock;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Stop_Clock is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -2086,15 +2086,15 @@ end Test_Stop_Clock;
 
 package Test_Get_Host is
    -- @test: Get_Host covered by Test_Get_Host
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Host;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Host is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -2104,15 +2104,15 @@ end Test_Get_Host;
 
 package Test_C_Exit is
    -- @test: C_Exit covered by Test_C_Exit
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_C_Exit;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_C_Exit is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

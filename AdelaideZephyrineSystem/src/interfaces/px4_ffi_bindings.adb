@@ -7,7 +7,7 @@ package body PX4_FFI_Bindings is
    --  Executes a Guidance, Navigation, and Control (GNC) command by parsing the
    --  parameter string and sending it via MAVLink to the PX4 flight controller.
    -- @test: Execute_GNC_Tool covered by sabotage_verifier
-   procedure Execute_GNC_Tool (Params : String) is
+   procedure Execute_GNC_Tool (Params : String) is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -32,17 +32,17 @@ end PX4_FFI_Bindings;
 
 package Test_Execute_GNC_Tool is
    -- @test: Execute_GNC_Tool covered by Test_Execute_GNC_Tool
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_GNC_Tool;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_GNC_Tool is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

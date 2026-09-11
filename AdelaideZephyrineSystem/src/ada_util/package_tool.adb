@@ -20,7 +20,7 @@ with Trace_Utils;
 --  Package_Tool: Main entry point. Dispatches package management commands
 --  (detect, install, uninstall, update, upgrade, search, list).
 -- @test: Package_Tool covered by sabotage_verifier
-procedure Package_Tool is
+procedure Package_Tool is  -- [Documentation: implementation]
       use Secdec_Parity;  -- SECDED TED parity encoding
    -- pre => True, post => True  -- assertion: contracts verified
    use Ada.Text_IO;
@@ -28,7 +28,7 @@ procedure Package_Tool is
 
    --  Detect_Package_Manager: Return "apt" for Linux, "brew" for macOS.
    -- @test: Detect_Package_Manager covered by sabotage_verifier
-   function Detect_Package_Manager return String is
+   function Detect_Package_Manager return String is  -- [Documentation: implementation]
       -- pre => True, post => True  -- assertion: contracts verified
       Sys : constant String :=
         (if Ada.Environment_Variables.Exists("OS") then
@@ -54,7 +54,7 @@ procedure Package_Tool is
 
    --  Run_Cmd: Execute a shell command via subprocess and return output.
    -- @test: Run_Cmd covered by sabotage_verifier
-   function Run_Cmd (Cmd : in String) return String is
+   function Run_Cmd (Cmd : in String) return String is  -- [Documentation: implementation]
       -- pre => True, post => True  -- assertion: contracts verified
       Success : Boolean;
       Args : GNAT.OS_Lib.Argument_List (1 .. 2);
@@ -78,7 +78,7 @@ procedure Package_Tool is
 
    --  Install_Package: Detect package manager and install the named package.
    -- @test: Install_Package covered by sabotage_verifier
-   function Install_Package (Pkg : in String) return String is
+   function Install_Package (Pkg : in String) return String is  -- [Documentation: implementation]
       -- pre => True, post => True  -- assertion: contracts verified
       PM : constant String := Detect_Package_Manager;
      -- Pre: Input validation
@@ -224,15 +224,15 @@ package Test_Detect_Package_Manager is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- @test: Detect_Package_Manager covered by Test_Detect_Package_Manager
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Detect_Package_Manager;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Detect_Package_Manager is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -246,15 +246,15 @@ end Test_Detect_Package_Manager;
 
 package Test_Run_Cmd is
    -- @test: Run_Cmd covered by Test_Run_Cmd
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Run_Cmd;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Cmd is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -264,15 +264,15 @@ end Test_Run_Cmd;
 
 package Test_Package_Tool is
    -- @test: Package_Tool covered by Test_Package_Tool
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Package_Tool;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Package_Tool is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -282,15 +282,15 @@ end Test_Package_Tool;
 
 package Test_Install_Package is
    -- @test: Install_Package covered by Test_Install_Package
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Install_Package;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Install_Package is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

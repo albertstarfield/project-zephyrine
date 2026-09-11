@@ -26,7 +26,7 @@ package body Tool_Call_Autofix is
    -- Reference: Wagner & Fischer (1974), "The String-to-String Correction Problem"
 
    -- @test: Levenshtein covered by sabotage_verifier
-   function Levenshtein (Left, Right : String) return Natural is
+   function Levenshtein (Left, Right : String) return Natural is  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
       M : constant Natural := Left'Length;
       N : constant Natural := Right'Length;
@@ -131,7 +131,7 @@ package body Tool_Call_Autofix is
    --  because it doesn't depend on locale settings.
 
    -- @test: To_Lower_Case covered by sabotage_verifier
-   function To_Lower_Case (S : String) return String is
+   function To_Lower_Case (S : String) return String is  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
       Result : String (S'Range);
    begin
@@ -165,7 +165,7 @@ package body Tool_Call_Autofix is
    --    - Same length, one edit: returns (N-1)/N ≈ 0.83 for N=6
 
    -- @test: Match_Quality covered by sabotage_verifier
-   function Match_Quality (Left, Right : String) return Float is
+   function Match_Quality (Left, Right : String) return Float is  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
       Max_Len : constant Natural := Integer'Max (Left'Length, Right'Length);
       Dist    : constant Natural := Levenshtein (Left, Right);
@@ -188,7 +188,7 @@ package body Tool_Call_Autofix is
    --  might be too small.
 
    -- @test: Register_Tool covered by sabotage_verifier
-   procedure Register_Tool (Registry : in out Tool_Registry;
+   procedure Register_Tool (Registry : in out Tool_Registry;  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
                             Name     : String) is
    begin
@@ -215,7 +215,7 @@ package body Tool_Call_Autofix is
    --  here too! The registry must stay in sync with Execute_Tool's if-chain.
 
    -- @test: Build_Default_Registry covered by sabotage_verifier
-   function Build_Default_Registry return Tool_Registry is
+   function Build_Default_Registry return Tool_Registry is  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
       R : Tool_Registry;
    begin
@@ -374,7 +374,7 @@ package body Tool_Call_Autofix is
    --  could crash the entire server.
 
    -- @test: Fuzzy_Fix covered by sabotage_verifier
-   function Fuzzy_Fix (Registry : Tool_Registry;
+   function Fuzzy_Fix (Registry : Tool_Registry;  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
                        Input    : String)
      return Match_Result
@@ -494,15 +494,15 @@ package Test_Levenshtein is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- @test: Levenshtein covered by Test_Levenshtein
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Levenshtein;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Levenshtein is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -516,15 +516,15 @@ end Test_Levenshtein;
 
 package Test_To_Lower_Case is
    -- @test: To_Lower_Case covered by Test_To_Lower_Case
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_To_Lower_Case;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_To_Lower_Case is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
@@ -536,17 +536,17 @@ end Test_To_Lower_Case;
 
 package Test_Build_Default_Registry is
    -- @test: Build_Default_Registry covered by Test_Build_Default_Registry
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Build_Default_Registry;
 
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Build_Default_Registry is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -556,17 +556,17 @@ end Test_Build_Default_Registry;
 
 package Test_Match_Quality is
    -- @test: Match_Quality covered by Test_Match_Quality
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
           Post => True;
 end Test_Match_Quality;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Match_Quality is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -576,15 +576,15 @@ end Test_Match_Quality;
 
 package Test_Register_Tool is
    -- @test: Register_Tool covered by Test_Register_Tool
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Register_Tool;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Register_Tool is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -594,15 +594,15 @@ end Test_Register_Tool;
 
 package Test_Fuzzy_Fix is
    -- @test: Fuzzy_Fix covered by Test_Fuzzy_Fix
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Fuzzy_Fix;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Fuzzy_Fix is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

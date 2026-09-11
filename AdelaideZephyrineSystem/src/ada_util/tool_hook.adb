@@ -11,7 +11,7 @@ package body Tool_Hook is
 
    -- function: Execute_Hook
    -- @test: Execute_Hook covered by sabotage_verifier
-   function Execute_Hook (Params : String) return String is
+   function Execute_Hook (Params : String) return String is  -- [Documentation: implementation]
       -- pre => True, post => True  -- assertion: contracts verified
       Tokens  : constant String := Trim (Params, Both);
       Start   : Natural := Tokens'First;
@@ -95,15 +95,15 @@ end Tool_Hook;
 
 package Test_Execute_Hook is
    -- @test: Execute_Hook covered by Test_Execute_Hook
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Hook;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Hook is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

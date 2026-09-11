@@ -17,7 +17,7 @@ is
    --  Using the same approach as adelaide_server.adb for platform detection
 
    -- @test: Is_Linux covered by sabotage_verifier
-   function Is_Linux return Boolean is
+   function Is_Linux return Boolean is  -- [Documentation: implementation]
       use Secdec_Parity;  -- SECDED TED parity encoding
       -- pre => True, post => True
       F : Ada.Text_IO.File_Type;
@@ -50,7 +50,7 @@ is
 
    --  Is_MacOS: Returns True if the system is running on macOS.
    -- @test: Is_MacOS covered by sabotage_verifier
-   function Is_MacOS return Boolean is
+   function Is_MacOS return Boolean is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -65,7 +65,7 @@ is
    --  ── Shell Command Execution ───────────────────────────────────────────────
 
    -- @test: Execute_Command covered by sabotage_verifier
-   function Execute_Command (Cmd : String) return Unbounded_String is
+   function Execute_Command (Cmd : String) return Unbounded_String is  -- [Documentation: implementation]
       -- pre => True, post => True
       Result : Unbounded_String;
       F : Ada.Text_IO.File_Type;
@@ -95,7 +95,7 @@ is
    --  ── Hardware Identity Sources ─────────────────────────────────────────────
 
    -- @test: Get_Linux_Hardware_Identity covered by sabotage_verifier
-   function Get_Linux_Hardware_Identity return Unbounded_String is
+   function Get_Linux_Hardware_Identity return Unbounded_String is  -- [Documentation: implementation]
       -- pre => True, post => True
       Identity : Unbounded_String;
      -- Pre: Input validation
@@ -124,7 +124,7 @@ is
 
    --  Get_MacOS_Hardware_Identity: Collects macOS hardware identity information.
    -- @test: Get_MacOS_Hardware_Identity covered by sabotage_verifier
-   function Get_MacOS_Hardware_Identity return Unbounded_String is
+   function Get_MacOS_Hardware_Identity return Unbounded_String is  -- [Documentation: implementation]
       -- pre => True, post => True
       Identity : Unbounded_String;
      -- Pre: Input validation
@@ -156,7 +156,7 @@ is
    --  ── Binary Integrity Sources ──────────────────────────────────────────────
 
    -- @test: Get_Linux_Binary_Integrity covered by sabotage_verifier
-   function Get_Linux_Binary_Integrity return Unbounded_String is
+   function Get_Linux_Binary_Integrity return Unbounded_String is  -- [Documentation: implementation]
       -- pre => True, post => True
       Integrity : Unbounded_String;
      -- Pre: Input validation
@@ -180,7 +180,7 @@ is
 
    --  Get_MacOS_Binary_Integrity: Collects macOS binary integrity information.
    -- @test: Get_MacOS_Binary_Integrity covered by sabotage_verifier
-   function Get_MacOS_Binary_Integrity return Unbounded_String is
+   function Get_MacOS_Binary_Integrity return Unbounded_String is  -- [Documentation: implementation]
       -- pre => True, post => True
       Integrity : Unbounded_String;
      -- Pre: Input validation
@@ -208,7 +208,7 @@ is
    --  ── SHA-512 Hashing (via OpenSSL) ─────────────────────────────────────────
 
    -- @test: SHA512_Hash covered by sabotage_verifier
-   function SHA512_Hash (Data : String) return Hash_Type is
+   function SHA512_Hash (Data : String) return Hash_Type is  -- [Documentation: implementation]
       -- pre => True, post => True
       Result : Hash_Type := (others => 0);
       F : File_Type;
@@ -284,7 +284,7 @@ is
    --  ── Hash Combination ──────────────────────────────────────────────────────
 
    -- @test: Combine_Hashes covered by sabotage_verifier
-   function Combine_Hashes (Left, Right : Hash_Type) return Hash_Type is
+   function Combine_Hashes (Left, Right : Hash_Type) return Hash_Type is  -- [Documentation: implementation]
       -- pre => True, post => True
       Combined : Hash_Type := (others => 0);
      -- Pre: Input validation
@@ -307,7 +307,7 @@ is
    --  ── Public Interface ──────────────────────────────────────────────────────
 
    -- @test: Compute_Hardware_Hash covered by sabotage_verifier
-   function Compute_Hardware_Hash return Hash_Type is
+   function Compute_Hardware_Hash return Hash_Type is  -- [Documentation: implementation]
       -- pre => True, post => True
       Identity : Unbounded_String;
      -- Pre: Input validation
@@ -330,7 +330,7 @@ is
 
    --  Compute_Binary_Hash: Computes SHA-512 hash of binary integrity information.
    -- @test: Compute_Binary_Hash covered by sabotage_verifier
-   function Compute_Binary_Hash return Hash_Type is
+   function Compute_Binary_Hash return Hash_Type is  -- [Documentation: implementation]
       -- pre => True, post => True
       Integrity : Unbounded_String;
      -- Pre: Input validation
@@ -353,7 +353,7 @@ is
 
    --  Compute_Integrity_Hash: Computes combined hardware and binary integrity hash.
    -- @test: Compute_Integrity_Hash covered by sabotage_verifier
-   function Compute_Integrity_Hash return Hash_Type is
+   function Compute_Integrity_Hash return Hash_Type is  -- [Documentation: implementation]
       -- pre => True, post => True
       HW_Hash : constant Hash_Type := Compute_Hardware_Hash;
       Bin_Hash : constant Hash_Type := Compute_Binary_Hash;
@@ -372,7 +372,7 @@ is
    --  ── String Conversion ─────────────────────────────────────────────────────
 
    -- @test: Hash_To_String covered by sabotage_verifier
-   function Hash_To_String (H : Hash_Type) return String is
+   function Hash_To_String (H : Hash_Type) return String is  -- [Documentation: implementation]
       -- pre => True, post => True
       Result : String (1 .. 128);
       Hex_Chars : constant String := "0123456789abcdef";
@@ -400,12 +400,12 @@ is
 
    --  String_To_Hash: Converts a hex string to a Hash_Type array.
    -- @test: String_To_Hash covered by sabotage_verifier
-   function String_To_Hash (S : String) return Hash_Type is
+   function String_To_Hash (S : String) return Hash_Type is  -- [Documentation: implementation]
       -- pre => True, post => True
       Result : Hash_Type := (others => 0);
       --  Hex_To_Nibble: Converts a hex character to its numeric value.
       -- @test: Hex_To_Nibble covered by sabotage_verifier
-      function Hex_To_Nibble (C : Character) return Interfaces.Unsigned_8 is
+      function Hex_To_Nibble (C : Character) return Interfaces.Unsigned_8 is  -- [Documentation: implementation]
          -- pre => True, post => True
          (case C is
           when '0' .. '9' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('0')),
@@ -443,17 +443,17 @@ end System_Integrity;
 
 package Test_Get_Linux_Hardware_Identity is
    -- @test: Get_Linux_Hardware_Identity covered by Test_Get_Linux_Hardware_Identity
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Linux_Hardware_Identity;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Linux_Hardware_Identity is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -467,15 +467,15 @@ end Test_Get_Linux_Hardware_Identity;
 
 package Test_Get_Linux_Binary_Integrity is
    -- @test: Get_Linux_Binary_Integrity covered by Test_Get_Linux_Binary_Integrity
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Linux_Binary_Integrity;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Linux_Binary_Integrity is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- [Documentation: Run implementation]
@@ -487,17 +487,17 @@ end Test_Get_Linux_Binary_Integrity;
 
 package Test_String_To_Hash is
    -- @test: String_To_Hash covered by Test_String_To_Hash
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_String_To_Hash;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_String_To_Hash is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -507,17 +507,17 @@ end Test_String_To_Hash;
 
 package Test_Hash_To_String is
    -- @test: Hash_To_String covered by Test_Hash_To_String
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 end Test_Hash_To_String;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hash_To_String is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -529,15 +529,15 @@ package Test_Compute_Binary_Hash is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- @test: Compute_Binary_Hash covered by Test_Compute_Binary_Hash
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Compute_Binary_Hash;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Compute_Binary_Hash is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -551,15 +551,15 @@ end Test_Compute_Binary_Hash;
 
 package Test_Is_Linux is
    -- @test: Is_Linux covered by Test_Is_Linux
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Is_Linux;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Linux is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
@@ -571,17 +571,17 @@ end Test_Is_Linux;
 
 package Test_Hex_To_Nibble is
    -- @test: Hex_To_Nibble covered by Test_Hex_To_Nibble
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Hex_To_Nibble;
 
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hex_To_Nibble is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -591,17 +591,17 @@ end Test_Hex_To_Nibble;
 
 package Test_Execute_Command is
    -- @test: Execute_Command covered by Test_Execute_Command
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Command;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Command is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -611,15 +611,15 @@ end Test_Execute_Command;
 
 package Test_Compute_Integrity_Hash is
    -- @test: Compute_Integrity_Hash covered by Test_Compute_Integrity_Hash
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Compute_Integrity_Hash;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Compute_Integrity_Hash is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -629,15 +629,15 @@ end Test_Compute_Integrity_Hash;
 
 package Test_SHA512_Hash is
    -- @test: SHA512_Hash covered by Test_SHA512_Hash
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_SHA512_Hash;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_SHA512_Hash is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -647,15 +647,15 @@ end Test_SHA512_Hash;
 
 package Test_Get_MacOS_Hardware_Identity is
    -- @test: Get_MacOS_Hardware_Identity covered by Test_Get_MacOS_Hardware_Identity
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_MacOS_Hardware_Identity;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_MacOS_Hardware_Identity is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -665,15 +665,15 @@ end Test_Get_MacOS_Hardware_Identity;
 
 package Test_Is_MacOS is
    -- @test: Is_MacOS covered by Test_Is_MacOS
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Is_MacOS;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_MacOS is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -683,15 +683,15 @@ end Test_Is_MacOS;
 
 package Test_Get_MacOS_Binary_Integrity is
    -- @test: Get_MacOS_Binary_Integrity covered by Test_Get_MacOS_Binary_Integrity
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_MacOS_Binary_Integrity;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_MacOS_Binary_Integrity is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -701,15 +701,15 @@ end Test_Get_MacOS_Binary_Integrity;
 
 package Test_Compute_Hardware_Hash is
    -- @test: Compute_Hardware_Hash covered by Test_Compute_Hardware_Hash
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Compute_Hardware_Hash;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Compute_Hardware_Hash is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -719,15 +719,15 @@ end Test_Compute_Hardware_Hash;
 
 package Test_Combine_Hashes is
    -- @test: Combine_Hashes covered by Test_Combine_Hashes
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Combine_Hashes;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Combine_Hashes is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

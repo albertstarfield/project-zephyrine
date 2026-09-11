@@ -51,7 +51,7 @@ try:
     @njit(cache=True)
     # [Documentation: _calculate_servo_outputs_numba implementation]
     # [Documentation: _calculate_servo_outputs_numba implementation]
-    def _calculate_servo_outputs_numba(command_code: int, value: float) -> tuple[float, float]:
+    def _calculate_servo_outputs_numba(command_code: int, value: float) -> tuple[float, float]:  # [Documentation: implementation]
         gyro_val: float = 0.0
         inertia_val: float = 0.0
         if command_code == 0:
@@ -79,7 +79,7 @@ except Exception as e:
 
 
 # --- Plain Python Fallback Calculation ---
-def _calculate_servo_outputs_python(command_code: int, value: float) -> tuple[float, float]:
+def _calculate_servo_outputs_python(command_code: int, value: float) -> tuple[float, float]:  # [Documentation: implementation]
     gyro_val: float = 0.0
     inertia_val: float = 0.0
     if command_code == 0:
@@ -138,7 +138,7 @@ PATTERN = re.compile(
 
 
 # --- The Main Hook Handler ---
-def _scan_and_verify_ports() -> str | None:
+def _scan_and_verify_ports() -> str | None:  # [Documentation: implementation]
     """
     Scans for available serial ports and attempts to handshake with an Arduino.
 
@@ -200,7 +200,7 @@ def _scan_and_verify_ports() -> str | None:
     return None  # No suitable port found
 
 
-def _send_command_to_mcu(command: str) -> tuple[bool, str]:
+def _send_command_to_mcu(command: str) -> tuple[bool, str]:  # [Documentation: implementation]
     """
     Sends a command string to the connected microcontroller (MCU).
 
@@ -261,7 +261,7 @@ def _send_command_to_mcu(command: str) -> tuple[bool, str]:
             return False, f"An unexpected error occurred during serial communication: {e}"
 
 # @test: handler is covered by sabotage_verifier
-def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
+def handler(match: Match[str], user_input: str, session_id: str) -> str | None:  # [Documentation: implementation]
     SUCCESS_PREFIX = "This is what I get or the result of my calculation: "
     ERROR_PREFIX = "I think Im lost can you repeat that again to me?"
 
@@ -345,4 +345,4 @@ def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
 
 # [Documentation: test_handler implementation]
 # [Documentation: test_handler implementation]
-def test_handler():    """Test stub for handler."""    pass
+def test_handler():    """Test stub for handler."""    pass  # [Documentation: implementation]

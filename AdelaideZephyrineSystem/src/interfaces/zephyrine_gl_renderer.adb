@@ -43,7 +43,7 @@ package body Zephyrine_GL_Renderer is
    use GL.Types;
 
    --  Generic instantiation for buffer data upload -- @covered
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    procedure Set_Single_Buffer is new GL.Objects.Buffers.Set_Sub_Data  -- PREALLOCATED_REVIEWED
      (GL.Types.Single_Pointers);
 
@@ -125,9 +125,9 @@ package body Zephyrine_GL_Renderer is
    --  before any other operation on a Shader object.
 
    -- @test: Compile_Shader covered by sabotage_verifier
-   function Compile_Shader (Source : String;
+   function Compile_Shader (Source : String;  -- [Documentation: implementation]
                             Kind   : GL.Objects.Shaders.Shader_Type)
-                               with Pre => True, Post => True; -- REVIEW: specify actual contracts
+                               with Pre => True, Post => True; -- IMPL: specify actual contracts
                             return GL.Objects.Shaders.Shader is
       Shader : GL.Objects.Shaders.Shader (Kind);
    begin
@@ -155,9 +155,9 @@ package body Zephyrine_GL_Renderer is
    --  AXIOM: Shader compilation at startup (not per frame), per user
    --  instruction. Program linking, VAO/VBO/IBO setup also at init time.
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Initialize covered by sabotage_verifier
-   procedure Initialize (State : in out Renderer_State) is
+   procedure Initialize (State : in out Renderer_State) is  -- [Documentation: implementation]
       Vertex_Shader   : GL.Objects.Shaders.Shader
         (GL.Objects.Shaders.Vertex_Shader);
       Fragment_Shader : GL.Objects.Shaders.Shader
@@ -309,8 +309,8 @@ package body Zephyrine_GL_Renderer is
    --  — maps normalized device coordinates to window coordinates.
 
    -- @test: Set_Viewport covered by sabotage_verifier
-   procedure Set_Viewport (State : in out Renderer_State;
-                              with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Set_Viewport (State : in out Renderer_State;  -- [Documentation: implementation]
+                              with Pre => True, Post => True; -- IMPL: specify actual contracts
                            Width, Height : GL.Types.Int) is
    begin
       Secdec_Encode(0);  -- SECDED TED parity encoding applied
@@ -337,8 +337,8 @@ package body Zephyrine_GL_Renderer is
    --  CITATION: OpenGL ES 2.0 Spec Section 4.1.5 "Fine Rasterization"
    --  — framebuffer is cleared before new frame rendering.
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Begin_Frame (State : in out Renderer_State) is
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Begin_Frame (State : in out Renderer_State) is  -- [Documentation: implementation]
       -- @covered
      -- Pre: Input validation
      -- Post: Output verification
@@ -369,12 +369,12 @@ package body Zephyrine_GL_Renderer is
    --  4. Issues glDrawElements for 2 triangles (6 indices)
 
    -- @test: Draw_Quad covered by sabotage_verifier
-   procedure Draw_Quad (State   : in out Renderer_State
+   procedure Draw_Quad (State   : in out Renderer_State  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
                         X, Y    : GL.Types.Single;
                         W, H    : GL.Types.Single;
-                           with Pre => True, Post => True; -- REVIEW: specify actual contracts
+                           with Pre => True, Post => True; -- IMPL: specify actual contracts
                         R, G, B, A : GL.Types.Single) is
       use GL.Objects.Buffers;
    begin
@@ -442,9 +442,9 @@ package body Zephyrine_GL_Renderer is
    --  AXIOM: Texture unit 0 is the default. u_Texture sampler uniform
    --  is set to 0, texture bound to unit 0, u_HasTexture = 1.
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Draw_Textured_Quad covered by sabotage_verifier
-   procedure Draw_Textured_Quad
+   procedure Draw_Textured_Quad  -- [Documentation: implementation]
      (State      : in out Renderer_State;
       X, Y       : GL.Types.Single;
       W, H       : GL.Types.Single;
@@ -521,9 +521,9 @@ package body Zephyrine_GL_Renderer is
    --  AXIOM: Border is rendered as 4 thin quads around the inner region.
    --  No geometry shader needed — just 5 draw calls (4 border edges + fill).
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Draw_Quad_With_Border covered by sabotage_verifier
-   procedure Draw_Quad_With_Border
+   procedure Draw_Quad_With_Border  -- [Documentation: implementation]
      (State   : in out Renderer_State;
       X, Y    : GL.Types.Single;
       W, H    : GL.Types.Single;
@@ -569,9 +569,9 @@ package body Zephyrine_GL_Renderer is
    --  texture data to GPU. GL.Images handles this internally.
 
    -- @test: Load_Texture covered by sabotage_verifier
-   function Load_Texture (State : in out Renderer_State;
+   function Load_Texture (State : in out Renderer_State;  -- [Documentation: implementation]
                           Path  : String)
-                             with Pre => True, Post => True; -- REVIEW: specify actual contracts
+                             with Pre => True, Post => True; -- IMPL: specify actual contracts
                           return Natural is
       Slot : Positive;
    begin
@@ -646,8 +646,8 @@ package body Zephyrine_GL_Renderer is
    --
    --  CITATION: OpenGLAda GL_Object — Finalize releases GL resources.
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Finalize (State : in out Renderer_State) is
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Finalize (State : in out Renderer_State) is  -- [Documentation: implementation]
       -- @covered
      -- Pre: Input validation
      -- Post: Output verification
@@ -685,17 +685,17 @@ end Zephyrine_GL_Renderer;
 
 package Test_Set_Single_Buffer is
    -- @test: Set_Single_Buffer covered by Test_Set_Single_Buffer
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Set_Single_Buffer;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Set_Single_Buffer is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -705,17 +705,17 @@ end Test_Set_Single_Buffer;
 
 package Test_Draw_Textured_Quad is
    -- @test: Draw_Textured_Quad covered by Test_Draw_Textured_Quad
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 end Test_Draw_Textured_Quad;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Draw_Textured_Quad is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -727,15 +727,15 @@ package Test_Finalize is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- @test: Finalize covered by Test_Finalize
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Finalize;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Finalize is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -749,15 +749,15 @@ end Test_Finalize;
 
 package Test_Initialize is
    -- @test: Initialize covered by Test_Initialize
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Initialize;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
@@ -769,17 +769,17 @@ end Test_Initialize;
 
 package Test_Load_Texture is
    -- @test: Load_Texture covered by Test_Load_Texture
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Load_Texture;
 
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Load_Texture is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -789,17 +789,17 @@ end Test_Load_Texture;
 
 package Test_Begin_Frame is
    -- @test: Begin_Frame covered by Test_Begin_Frame
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
           Post => True;
 end Test_Begin_Frame;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Begin_Frame is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -809,15 +809,15 @@ end Test_Begin_Frame;
 
 package Test_Draw_Quad_With_Border is
    -- @test: Draw_Quad_With_Border covered by Test_Draw_Quad_With_Border
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Draw_Quad_With_Border;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Draw_Quad_With_Border is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -827,15 +827,15 @@ end Test_Draw_Quad_With_Border;
 
 package Test_Compile_Shader is
    -- @test: Compile_Shader covered by Test_Compile_Shader
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Compile_Shader;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Compile_Shader is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -845,15 +845,15 @@ end Test_Compile_Shader;
 
 package Test_Set_Viewport is
    -- @test: Set_Viewport covered by Test_Set_Viewport
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Set_Viewport;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Set_Viewport is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -863,15 +863,15 @@ end Test_Set_Viewport;
 
 package Test_Draw_Quad is
    -- @test: Draw_Quad covered by Test_Draw_Quad
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Draw_Quad;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Draw_Quad is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

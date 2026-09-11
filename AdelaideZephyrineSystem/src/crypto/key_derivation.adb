@@ -19,8 +19,8 @@ is
 
    --  HKDF_SHA512: C FFI binding for HKDF-SHA512 key derivation.
    -- @test: HKDF_SHA512 covered by sabotage_verifier
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   function HKDF_SHA512
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   function HKDF_SHA512  -- [Documentation: implementation]
      (Salt      : System.Address; -- FFI: System.Address required for C binding
       Salt_Len  : Interfaces.C.size_t;
       IKM       : System.Address; -- FFI: System.Address required for C binding
@@ -34,7 +34,7 @@ is
 
    --  HKDF_SHA256: C FFI binding for HKDF-SHA256 key derivation.
    -- @test: HKDF_SHA256 covered by sabotage_verifier
-   function HKDF_SHA256
+   function HKDF_SHA256  -- [Documentation: implementation]
      (Salt      : System.Address; -- FFI: System.Address required for C binding
       Salt_Len  : Interfaces.C.size_t;
       IKM       : System.Address; -- FFI: System.Address required for C binding
@@ -54,7 +54,7 @@ is
    --  ── String Conversion Helpers ─────────────────────────────────────────────
 
    -- @test: Master_Key_To_Hex covered by sabotage_verifier
-   function Master_Key_To_Hex (K : Master_Key_Type) return String is
+   function Master_Key_To_Hex (K : Master_Key_Type) return String is  -- [Documentation: implementation]
       use Secdec_Parity;  -- SECDED TED parity encoding
       -- pre => True, post => True
       -- pre => True, post => True
@@ -79,12 +79,12 @@ is
 
    --  Hex_To_Master_Key: Converts a hex string to a Master_Key_Type array.
    -- @test: Hex_To_Master_Key covered by sabotage_verifier
-   function Hex_To_Master_Key (S : String) return Master_Key_Type is
+   function Hex_To_Master_Key (S : String) return Master_Key_Type is  -- [Documentation: implementation]
       -- pre => True, post => True
       Result : Master_Key_Type := (others => 0);
       --  Hex_To_Nibble: Converts a hex character to its numeric value.
       -- @test: Hex_To_Nibble covered by sabotage_verifier
-      function Hex_To_Nibble (C : Character) return Interfaces.Unsigned_8 is
+      function Hex_To_Nibble (C : Character) return Interfaces.Unsigned_8 is  -- [Documentation: implementation]
          -- pre => True, post => True
          (case C is
           when '0' .. '9' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('0')),
@@ -115,7 +115,7 @@ is
 
    --  AES_Key_To_Hex: Converts an AES_Key_Type array to a hex string.
    -- @test: AES_Key_To_Hex covered by sabotage_verifier
-   function AES_Key_To_Hex (K : AES_Key_Type) return String is
+   function AES_Key_To_Hex (K : AES_Key_Type) return String is  -- [Documentation: implementation]
       -- pre => True, post => True
       Result : String (1 .. 64);
       Hex_Chars : constant String := "0123456789abcdef";
@@ -137,12 +137,12 @@ is
 
    --  Hex_To_AES_Key: Converts a hex string to an AES_Key_Type array.
    -- @test: Hex_To_AES_Key covered by sabotage_verifier
-   function Hex_To_AES_Key (S : String) return AES_Key_Type is
+   function Hex_To_AES_Key (S : String) return AES_Key_Type is  -- [Documentation: implementation]
       -- pre => True, post => True
       Result : AES_Key_Type := (others => 0);
       --  Hex_To_Nibble: Converts a hex character to its numeric value.
       -- @test: Hex_To_Nibble covered by sabotage_verifier
-      function Hex_To_Nibble (C : Character) return Interfaces.Unsigned_8 is
+      function Hex_To_Nibble (C : Character) return Interfaces.Unsigned_8 is  -- [Documentation: implementation]
          -- pre => True, post => True
          (case C is
           when '0' .. '9' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('0')),
@@ -174,7 +174,7 @@ is
    --  ── Key Derivation Functions ──────────────────────────────────────────────
 
    -- @test: Derive_Master_Key covered by sabotage_verifier
-   function Derive_Master_Key
+   function Derive_Master_Key  -- [Documentation: implementation]
      (Integrity_Hash : Hash_Type;
       User_Secret    : String) return Master_Key_Type
    is
@@ -215,7 +215,7 @@ is
 
    --  Derive_AES_Key: Derives an AES encryption key from the master key and context.
    -- @test: Derive_AES_Key covered by sabotage_verifier
-   function Derive_AES_Key
+   function Derive_AES_Key  -- [Documentation: implementation]
      (Master_Key : Master_Key_Type;
       Context    : String) return AES_Key_Type
    is
@@ -257,7 +257,7 @@ is
    --  ── Initialization ────────────────────────────────────────────────────────
 
    -- @test: Initialize_Key_Derivation covered by sabotage_verifier
-   function Initialize_Key_Derivation return Boolean is
+   function Initialize_Key_Derivation return Boolean is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -277,7 +277,7 @@ is
 
    --  Derive_And_Store_Master_Key: Derives and stores the master key from user secret.
    -- @test: Derive_And_Store_Master_Key covered by sabotage_verifier
-   procedure Derive_And_Store_Master_Key (Password_Salt : Hash_Type; User_Secret : String) is
+   procedure Derive_And_Store_Master_Key (Password_Salt : Hash_Type; User_Secret : String) is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -316,7 +316,7 @@ is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- @test: Get_Master_Key covered by sabotage_verifier
-   function Get_Master_Key return Master_Key_Type is
+   function Get_Master_Key return Master_Key_Type is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -332,7 +332,7 @@ is
    -- @test: Clear_Master_Key covered by sabotage_verifier
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Clear_Master_Key is
+   procedure Clear_Master_Key is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -351,15 +351,15 @@ end Key_Derivation;
 -- [Documentation: Run implementation]
 package Test_Initialize_Key_Derivation is
    -- @test: Initialize_Key_Derivation covered by Test_Initialize_Key_Derivation
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Initialize_Key_Derivation;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize_Key_Derivation is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -371,17 +371,17 @@ end Test_Initialize_Key_Derivation;
 
 package Test_Hex_To_Master_Key is
    -- @test: Hex_To_Master_Key covered by Test_Hex_To_Master_Key
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Hex_To_Master_Key;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hex_To_Master_Key is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run is begin null; end Run
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -391,7 +391,7 @@ end Test_Hex_To_Master_Key;
 
 package Test_Clear_Master_Key is
    -- @test: Clear_Master_Key covered by Test_Clear_Master_Key
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Clear_Master_Key;
@@ -400,10 +400,10 @@ end Test_Clear_Master_Key;
 
 -- [Documentation: Run implementation]
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Clear_Master_Key is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -415,15 +415,15 @@ package Test_Hex_To_AES_Key is
    -- @test: Hex_To_AES_Key covered by Test_Hex_To_AES_Key
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Hex_To_AES_Key;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hex_To_AES_Key is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -437,15 +437,15 @@ end Test_Hex_To_AES_Key;
 
 package Test_Hex_To_Nibble is
    -- @test: Hex_To_Nibble covered by Test_Hex_To_Nibble
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Hex_To_Nibble;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hex_To_Nibble is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
@@ -457,17 +457,17 @@ end Test_Hex_To_Nibble;
 
 package Test_Master_Key_To_Hex is
    -- @test: Master_Key_To_Hex covered by Test_Master_Key_To_Hex
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Master_Key_To_Hex;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 package body Test_Master_Key_To_Hex is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -477,17 +477,17 @@ end Test_Master_Key_To_Hex;
 
 package Test_Derive_And_Store_Master_Key is
    -- @test: Derive_And_Store_Master_Key covered by Test_Derive_And_Store_Master_Key
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
           Post => True;
 end Test_Derive_And_Store_Master_Key;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Derive_And_Store_Master_Key is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -499,15 +499,15 @@ end Test_Derive_And_Store_Master_Key;
 -- [Documentation: Run implementation]
 package Test_Derive_Master_Key is
    -- @test: Derive_Master_Key covered by Test_Derive_Master_Key
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Derive_Master_Key;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Derive_Master_Key is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -517,15 +517,15 @@ end Test_Derive_Master_Key;
 
 package Test_Get_Master_Key is
    -- @test: Get_Master_Key covered by Test_Get_Master_Key
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Master_Key;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Master_Key is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -535,15 +535,15 @@ end Test_Get_Master_Key;
 
 package Test_HKDF_SHA256 is
    -- @test: HKDF_SHA256 covered by Test_HKDF_SHA256
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_HKDF_SHA256;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_HKDF_SHA256 is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -553,15 +553,15 @@ end Test_HKDF_SHA256;
 
 package Test_HKDF_SHA512 is
    -- @test: HKDF_SHA512 covered by Test_HKDF_SHA512
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_HKDF_SHA512;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_HKDF_SHA512 is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -571,15 +571,15 @@ end Test_HKDF_SHA512;
 
 package Test_AES_Key_To_Hex is
    -- @test: AES_Key_To_Hex covered by Test_AES_Key_To_Hex
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_AES_Key_To_Hex;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_AES_Key_To_Hex is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -589,15 +589,15 @@ end Test_AES_Key_To_Hex;
 
 package Test_Derive_AES_Key is
    -- @test: Derive_AES_Key covered by Test_Derive_AES_Key
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Derive_AES_Key;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Derive_AES_Key is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

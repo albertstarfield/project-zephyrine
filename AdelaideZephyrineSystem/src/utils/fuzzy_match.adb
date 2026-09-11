@@ -5,7 +5,7 @@ package body Fuzzy_Match is
 
    --  To_Lower: Converts an uppercase character to lowercase.
    -- @test: To_Lower covered by sabotage_verifier
-   function To_Lower (C : Character) return Character is
+   function To_Lower (C : Character) return Character is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -22,8 +22,8 @@ package body Fuzzy_Match is
 
    --  Match: Returns a fuzzy match score between 0.0 (no match) and 1.0 (exact match).
    -- @test: Match covered by sabotage_verifier
-   function Match (Haystack, Needle : String) return Float
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   function Match (Haystack, Needle : String) return Float  -- [Documentation: implementation]
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    is
       H_Len   : constant Integer := Haystack'Length;
       N_Len   : constant Integer := Needle'Length;

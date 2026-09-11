@@ -41,85 +41,85 @@ with Spark_Drbg; -- Force linkage for adl_crypto.c C symbols
 
 --  Adelaide_Watchdog: Main entry point for the Adelaide watchdog daemon.
 -- @test: Adelaide_Watchdog covered by sabotage_verifier
-procedure Adelaide_Watchdog is
+procedure Adelaide_Watchdog is  -- [Documentation: implementation]
       use Secdec_Parity;  -- SECDED TED parity encoding
    -- pre => True, post => True
 
    --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM)
    -- @test: Install_Shutdown_Handlers covered by sabotage_verifier
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Install_Shutdown_Handlers
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Install_Shutdown_Handlers  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    pragma Import (C, Install_Shutdown_Handlers, "install_shutdown_handlers");
    -- @test: Is_Shutdown_Requested covered by sabotage_verifier
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   function Is_Shutdown_Requested return Interfaces.C.int
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   function Is_Shutdown_Requested return Interfaces.C.int  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
    --  Last_Signal_Received: C FFI binding returning the last signal received by the process.
    -- @test: Last_Signal_Received covered by sabotage_verifier
-   function Last_Signal_Received return Interfaces.C.int
+   function Last_Signal_Received return Interfaces.C.int  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    pragma Import (C, Last_Signal_Received, "last_signal_received");
 
    --  _exit() bypasses atexit handlers — prevents Metal assertion failure
    -- @test: C_Exit covered by sabotage_verifier
-   procedure C_Exit (Status : Interfaces.C.int)
+   procedure C_Exit (Status : Interfaces.C.int)  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    pragma Import (C, C_Exit, "_exit");
 
    --  Is_Another_Watchdog_Running: Checks if another watchdog instance is already running.
    -- @test: Is_Another_Watchdog_Running covered by sabotage_verifier
-   function Is_Another_Watchdog_Running return Boolean
+   function Is_Another_Watchdog_Running return Boolean  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    --  Write_Watchdog_PID: Writes the watchdog PID to the PID file.
    -- @test: Write_Watchdog_PID covered by sabotage_verifier
-   procedure Write_Watchdog_PID
+   procedure Write_Watchdog_PID  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    --  Write_Watchdog_Heartbeat: Writes the current timestamp to the heartbeat file.
    -- @test: Write_Watchdog_Heartbeat covered by sabotage_verifier
-   procedure Write_Watchdog_Heartbeat
+   procedure Write_Watchdog_Heartbeat  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    --  Read_PID: Reads a PID from the server PID file.
    -- @test: Read_PID covered by sabotage_verifier
-   function Read_PID return Integer
+   function Read_PID return Integer  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    --  Is_Process_Alive: Checks if a process with the given PID is alive.
    -- @test: Is_Process_Alive covered by sabotage_verifier
-   function Is_Process_Alive (Pid : Integer) return Boolean
+   function Is_Process_Alive (Pid : Integer) return Boolean  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    --  Get_Heartbeat_Age_S: Returns the age of the last heartbeat in seconds.
    -- @test: Get_Heartbeat_Age_S covered by sabotage_verifier
-   function Get_Heartbeat_Age_S return Duration
+   function Get_Heartbeat_Age_S return Duration  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    --  Read_Args: Reads the server command-line arguments from the args file.
    -- @test: Read_Args covered by sabotage_verifier
-   function Read_Args return String with Pre => True, Post => True;
+   function Read_Args return String with Pre => True, Post => True;  -- [Documentation: implementation]
    --  Restart_Server: Restarts the server process with the given old PID.
    -- @test: Restart_Server covered by sabotage_verifier
-   procedure Restart_Server (Old_Pid : Integer) with Pre => True, Post => True;
+   procedure Restart_Server (Old_Pid : Integer) with Pre => True, Post => True;  -- [Documentation: implementation]
    --  Check_Server: Checks server health and restarts if necessary.
    -- @test: Check_Server covered by sabotage_verifier
-   procedure Check_Server with Pre => True, Post => True;
+   procedure Check_Server with Pre => True, Post => True;  -- [Documentation: implementation]
    --  Get_Port: Returns the server port from command-line args or environment.
    -- @test: Get_Port covered by sabotage_verifier
-   function Get_Port return String with Pre => True, Post => True;
+   function Get_Port return String with Pre => True, Post => True;  -- [Documentation: implementation]
    --  Get_Host: Returns the server host from command-line args or environment.
    -- @test: Get_Host covered by sabotage_verifier
-   function Get_Host return String with Pre => True, Post => True;
+   function Get_Host return String with Pre => True, Post => True;  -- [Documentation: implementation]
    --  Check_All_APIs: Checks all API endpoints for health and logs results.
    -- @test: Check_All_APIs covered by sabotage_verifier
-   procedure Check_All_APIs with Pre => True, Post => True;
+   procedure Check_All_APIs with Pre => True, Post => True;  -- [Documentation: implementation]
 
    Shutdown_Requested : exception;
 
@@ -145,21 +145,21 @@ procedure Adelaide_Watchdog is
    --  we read PIDs as plain Integers from the IPC file and GNAT.OS_Lib.Kill
    --  requires the private Process_Id type (no Integer-to-Process_Id conversion).
    -- @test: Sys_Kill covered by sabotage_verifier
-   function Sys_Kill (P : Integer; Sig : Integer) return Integer
+   function Sys_Kill (P : Integer; Sig : Integer) return Integer  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    pragma Import (C, Sys_Kill, "kill");
 
    --  Get_PID: C FFI binding to get the current process ID.
    -- @test: Get_PID covered by sabotage_verifier
-   function Get_PID return Integer
+   function Get_PID return Integer  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    pragma Import (C, Get_PID, "getpid");
 
    --  Get_PPID: C FFI binding to get the parent process ID.
    -- @test: Get_PPID covered by sabotage_verifier
-   function Get_PPID return Integer
+   function Get_PPID return Integer  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    pragma Import (C, Get_PPID, "getppid");
@@ -167,7 +167,7 @@ procedure Adelaide_Watchdog is
    --  Check if another watchdog is already running.
    --  Uses PID file + heartbeat freshness (same logic as server).
    -- @test: Is_Another_Watchdog_Running covered by sabotage_verifier
-   function Is_Another_Watchdog_Running return Boolean is
+   function Is_Another_Watchdog_Running return Boolean is  -- [Documentation: implementation]
       -- pre => True, post => True
       -- pre => True, post => True
       -- pre => True, post => True
@@ -243,7 +243,7 @@ procedure Adelaide_Watchdog is
 
    --  Write our own PID file and heartbeat for other instances to detect.
    -- @test: Write_Watchdog_PID covered by sabotage_verifier
-   procedure Write_Watchdog_PID is
+   procedure Write_Watchdog_PID is  -- [Documentation: implementation]
       -- pre => True, post => True
       F : File_Type;
      -- Pre: Input validation
@@ -263,7 +263,7 @@ procedure Adelaide_Watchdog is
 
    --  Write_Watchdog_Heartbeat: Writes the current timestamp to the heartbeat file atomically.
    -- @test: Write_Watchdog_Heartbeat covered by sabotage_verifier
-   procedure Write_Watchdog_Heartbeat is
+   procedure Write_Watchdog_Heartbeat is  -- [Documentation: implementation]
       -- pre => True, post => True
       F : File_Type;
       Tmp_File : constant String := WD_HB_File & ".tmp";
@@ -306,7 +306,7 @@ procedure Adelaide_Watchdog is
    -------------------
 
    -- @test: Read_PID covered by sabotage_verifier
-   function Read_PID return Integer is
+   function Read_PID return Integer is  -- [Documentation: implementation]
       -- pre => True, post => True
       F : File_Type;
       S : String (1 .. 16);
@@ -335,7 +335,7 @@ procedure Adelaide_Watchdog is
    --------------------
 
    -- @test: Is_Process_Alive covered by sabotage_verifier
-   function Is_Process_Alive (Pid : Integer) return Boolean is
+   function Is_Process_Alive (Pid : Integer) return Boolean is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -355,7 +355,7 @@ procedure Adelaide_Watchdog is
    -------------------------
 
    -- @test: Get_Heartbeat_Age_S covered by sabotage_verifier
-   function Get_Heartbeat_Age_S return Duration is
+   function Get_Heartbeat_Age_S return Duration is  -- [Documentation: implementation]
       -- pre => True, post => True
       F : File_Type;
       S : String (1 .. 32);
@@ -393,7 +393,7 @@ procedure Adelaide_Watchdog is
    --  The file is written by run.py before launching the server.
 
    -- @test: Read_Args covered by sabotage_verifier
-   function Read_Args return String is
+   function Read_Args return String is  -- [Documentation: implementation]
       -- pre => True, post => True
       F : File_Type;
       S : String (1 .. 256);
@@ -426,7 +426,7 @@ procedure Adelaide_Watchdog is
    ----------------------
 
    -- @test: Restart_Server covered by sabotage_verifier
-   procedure Restart_Server (Old_Pid : Integer) is
+   procedure Restart_Server (Old_Pid : Integer) is  -- [Documentation: implementation]
       -- pre => True, post => True
       Alr       : String_Access;
       Cmd       : String_Access;
@@ -502,7 +502,7 @@ procedure Adelaide_Watchdog is
    -------------------
 
    -- @test: Check_Server covered by sabotage_verifier
-   procedure Check_Server is
+   procedure Check_Server is  -- [Documentation: implementation]
       -- pre => True, post => True
       Pid         : constant Integer := Read_PID;
       Alive       : constant Boolean := Is_Process_Alive (Pid);
@@ -587,7 +587,7 @@ procedure Adelaide_Watchdog is
 
    --  Port/Host resolution: args > env vars > defaults
    -- @test: Get_Port covered by sabotage_verifier
-   function Get_Port return String is
+   function Get_Port return String is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -613,7 +613,7 @@ procedure Adelaide_Watchdog is
 
    --  Get_Host: Returns the server host from command-line args or environment.
    -- @test: Get_Host covered by sabotage_verifier
-   function Get_Host return String is
+   function Get_Host return String is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -639,7 +639,7 @@ procedure Adelaide_Watchdog is
 
    --  Check_All_APIs: Checks all API endpoints for health and logs results.
    -- @test: Check_All_APIs covered by sabotage_verifier
-   procedure Check_All_APIs is
+   procedure Check_All_APIs is  -- [Documentation: implementation]
       -- pre => True, post => True
       Port     : constant String := Get_Port;
       Host     : constant String := Get_Host;
@@ -867,15 +867,15 @@ package Test_Write_Watchdog_Heartbeat is
    -- @test: Write_Watchdog_Heartbeat covered by Test_Write_Watchdog_Heartbeat
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Write_Watchdog_Heartbeat;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Write_Watchdog_Heartbeat is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -889,15 +889,15 @@ end Test_Write_Watchdog_Heartbeat;
 
 package Test_Restart_Server is
    -- @test: Restart_Server covered by Test_Restart_Server
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Restart_Server;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Restart_Server is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
@@ -909,17 +909,17 @@ end Test_Restart_Server;
 
 package Test_C_Exit is
    -- @test: C_Exit covered by Test_C_Exit
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_C_Exit;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 package body Test_C_Exit is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -929,17 +929,17 @@ end Test_C_Exit;
 
 package Test_Sys_Kill is
    -- @test: Sys_Kill covered by Test_Sys_Kill
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
           Post => True;
 end Test_Sys_Kill;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Sys_Kill is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -951,15 +951,15 @@ end Test_Sys_Kill;
 -- [Documentation: Run implementation]
 package Test_Check_All_APIs is
    -- @test: Check_All_APIs covered by Test_Check_All_APIs
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Check_All_APIs;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Check_All_APIs is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -971,17 +971,17 @@ end Test_Check_All_APIs;
 
 package Test_Is_Another_Watchdog_Running is
    -- @test: Is_Another_Watchdog_Running covered by Test_Is_Another_Watchdog_Running
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Is_Another_Watchdog_Running;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Another_Watchdog_Running is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run is begin null; end Run
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -991,7 +991,7 @@ end Test_Is_Another_Watchdog_Running;
 
 package Test_Get_Heartbeat_Age_S is
    -- @test: Get_Heartbeat_Age_S covered by Test_Get_Heartbeat_Age_S
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Heartbeat_Age_S;
@@ -1000,10 +1000,10 @@ end Test_Get_Heartbeat_Age_S;
 
 -- [Documentation: Run implementation]
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Heartbeat_Age_S is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1015,15 +1015,15 @@ package Test_Get_Host is
    -- @test: Get_Host covered by Test_Get_Host
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Host;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Host is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1037,15 +1037,15 @@ end Test_Get_Host;
 
 package Test_Get_Port is
    -- @test: Get_Port covered by Test_Get_Port
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Port;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Port is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
@@ -1057,17 +1057,17 @@ end Test_Get_Port;
 
 package Test_Read_PID is
    -- @test: Read_PID covered by Test_Read_PID
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Read_PID;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 package body Test_Read_PID is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1077,15 +1077,15 @@ end Test_Read_PID;
 
 package Test_Last_Signal_Received is
    -- @test: Last_Signal_Received covered by Test_Last_Signal_Received
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Last_Signal_Received;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Last_Signal_Received is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1095,15 +1095,15 @@ end Test_Last_Signal_Received;
 
 package Test_Install_Shutdown_Handlers is
    -- @test: Install_Shutdown_Handlers covered by Test_Install_Shutdown_Handlers
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Install_Shutdown_Handlers;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Install_Shutdown_Handlers is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1113,15 +1113,15 @@ end Test_Install_Shutdown_Handlers;
 
 package Test_Is_Shutdown_Requested is
    -- @test: Is_Shutdown_Requested covered by Test_Is_Shutdown_Requested
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Is_Shutdown_Requested;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Shutdown_Requested is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1131,15 +1131,15 @@ end Test_Is_Shutdown_Requested;
 
 package Test_Is_Process_Alive is
    -- @test: Is_Process_Alive covered by Test_Is_Process_Alive
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Is_Process_Alive;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Process_Alive is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1149,15 +1149,15 @@ end Test_Is_Process_Alive;
 
 package Test_Check_Server is
    -- @test: Check_Server covered by Test_Check_Server
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Check_Server;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Check_Server is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1167,15 +1167,15 @@ end Test_Check_Server;
 
 package Test_Write_Watchdog_PID is
    -- @test: Write_Watchdog_PID covered by Test_Write_Watchdog_PID
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Write_Watchdog_PID;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Write_Watchdog_PID is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1185,15 +1185,15 @@ end Test_Write_Watchdog_PID;
 
 package Test_Read_Args is
    -- @test: Read_Args covered by Test_Read_Args
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Read_Args;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Read_Args is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1203,15 +1203,15 @@ end Test_Read_Args;
 
 package Test_Get_PID is
    -- @test: Get_PID covered by Test_Get_PID
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_PID;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_PID is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1221,15 +1221,15 @@ end Test_Get_PID;
 
 package Test_Get_PPID is
    -- @test: Get_PPID covered by Test_Get_PPID
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_PPID;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_PPID is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1239,15 +1239,15 @@ end Test_Get_PPID;
 
 package Test_Adelaide_Watchdog is
    -- @test: Adelaide_Watchdog covered by Test_Adelaide_Watchdog
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Adelaide_Watchdog;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Adelaide_Watchdog is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

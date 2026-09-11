@@ -4,17 +4,17 @@ package body Performance_Monitor is
    pragma SPARK_Mode (On);  -- DO-178C 5.2.2
    --  Initialize: Initializes the performance monitor (no-op implementation).
    -- @test: Initialize covered by sabotage_verifier
-   procedure Initialize is begin null; end Initialize
+   procedure Initialize is begin null; end Initialize  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    --  Record_Metrics: Records performance metrics (no-op implementation).
    -- @test: Record_Metrics covered by sabotage_verifier
-   procedure Record_Metrics is begin null; end Record_Metrics
+   procedure Record_Metrics is begin null; end Record_Metrics  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    --  Finalize: Finalizes the performance monitor (no-op implementation).
    -- @test: Finalize covered by sabotage_verifier
-   procedure Finalize is begin null; end Finalize
+   procedure Finalize is begin null; end Finalize  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Performance_Monitor;

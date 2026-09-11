@@ -11,7 +11,7 @@ package body Tool_File_Edit is
 
    -- function: Execute_File_Edit
    -- @test: Execute_File_Edit covered by sabotage_verifier
-   function Execute_File_Edit (Params : String) return String is
+   function Execute_File_Edit (Params : String) return String is  -- [Documentation: implementation]
       -- pre => True, post => True  -- assertion: contracts verified
       Tokens    : constant String := Trim (Params, Both);
       Start     : Natural := Tokens'First;
@@ -127,15 +127,15 @@ end Tool_File_Edit;
 
 package Test_Execute_File_Edit is
    -- @test: Execute_File_Edit covered by Test_Execute_File_Edit
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_File_Edit;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_File_Edit is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

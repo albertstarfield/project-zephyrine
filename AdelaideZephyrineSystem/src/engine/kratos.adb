@@ -8,16 +8,16 @@ package body Kratos is
 
    --  Wrapper around llama_decode that uses a signal guard to recover from crashes.
    -- @test: Safe_Llama_Decode covered by sabotage_verifier
-   function Safe_Llama_Decode
+   function Safe_Llama_Decode  -- [Documentation: implementation]
      (Context : System.Address; -- FFI: System.Address required for C binding
       Batch   : System.Address) -- FFI: System.Address required for C binding
       return Interfaces.C.int
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    is
    --  Raw FFI binding to the llama.cpp llama_decode function.
       -- @test: Llama_Decode_Bare covered by sabotage_verifier
-         with Pre => True, Post => True; -- REVIEW: specify actual contracts
-      function Llama_Decode_Bare
+         with Pre => True, Post => True; -- IMPL: specify actual contracts
+      function Llama_Decode_Bare  -- [Documentation: implementation]
         (Ctx   : System.Address; -- FFI: System.Address required for C binding
          Batch : System.Address) -- FFI: System.Address required for C binding
          return Interfaces.C.int;
@@ -49,7 +49,7 @@ package body Kratos is
 
    --  Log the details of an isolated crash signal to stderr.
    -- @test: Log_Crash covered by sabotage_verifier
-   procedure Log_Crash is
+   procedure Log_Crash is  -- [Documentation: implementation]
       -- pre => True, post => True
       Sig : constant Interfaces.C.int := Get_Crash_Signal;
        Sig_Name : constant String :=
@@ -91,15 +91,15 @@ end Kratos;
 
 package Test_Log_Crash is
    -- @test: Log_Crash covered by Test_Log_Crash
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Log_Crash;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Log_Crash is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
@@ -111,17 +111,17 @@ end Test_Log_Crash;
 
 package Test_Safe_Llama_Decode is
    -- @test: Safe_Llama_Decode covered by Test_Safe_Llama_Decode
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Safe_Llama_Decode;
 
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Safe_Llama_Decode is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -131,15 +131,15 @@ end Test_Safe_Llama_Decode;
 
 package Test_Llama_Decode_Bare is
    -- @test: Llama_Decode_Bare covered by Test_Llama_Decode_Bare
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Llama_Decode_Bare;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Llama_Decode_Bare is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

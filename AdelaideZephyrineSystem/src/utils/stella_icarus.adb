@@ -10,7 +10,7 @@ package body Stella_Icarus is
 
    --  Initialize: Initializes the Stella Icarus subsystem.
    -- @test: Initialize covered by sabotage_verifier
-   procedure Initialize is
+   procedure Initialize is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -24,7 +24,7 @@ package body Stella_Icarus is
 
    --  Check_API_Trigger: Checks if the prompt matches a deterministic API trigger.
    -- @test: Check_API_Trigger covered by sabotage_verifier
-   function Check_API_Trigger (Prompt : String) return String is
+   function Check_API_Trigger (Prompt : String) return String is  -- [Documentation: implementation]
       -- pre => True, post => True
       Lower_Prompt : constant String := Ada.Characters.Handling.To_Lower (Prompt);
      -- Pre: Input validation

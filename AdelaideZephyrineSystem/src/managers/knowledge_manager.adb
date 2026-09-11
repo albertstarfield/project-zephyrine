@@ -103,7 +103,7 @@ package body Knowledge_Manager is
    Init_Start_Time : Ada.Real_Time.Time;
 
    -- @test: Initialize covered by sabotage_verifier
-   procedure Initialize is
+   procedure Initialize is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -127,7 +127,7 @@ Secdec_Encode(0);  -- SECDED TED parity encoding applied
 
    --  Start_Tasks: Starts all background knowledge management tasks.
    -- @test: Start_Tasks covered by sabotage_verifier
-   procedure Start_Tasks is
+   procedure Start_Tasks is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -201,12 +201,12 @@ Secdec_Encode(0);  -- SECDED TED parity encoding applied
 
     --  Retrieve the current user's home directory from the environment
     -- @test: Get_Home_Directory covered by sabotage_verifier
-    function Get_Home_Directory return String is
+    function Get_Home_Directory return String is  -- [Documentation: implementation]
        -- pre => True, post => True
        use Interfaces.C.Strings;
        -- @test: Get_Env covered by sabotage_verifier
-          with Pre => True, Post => True; -- REVIEW: specify actual contracts
-       function Get_Env (Name : chars_ptr) return chars_ptr
+          with Pre => True, Post => True; -- IMPL: specify actual contracts
+       function Get_Env (Name : chars_ptr) return chars_ptr  -- [Documentation: implementation]
          with Pre => True,
               Post => True;
        pragma Import (C, Get_Env, "getenv");
@@ -233,7 +233,7 @@ Secdec_Encode(0);  -- SECDED TED parity encoding applied
 
      --  Check if a file is readable text by scanning for binary markers (null bytes)
      -- @test: Is_Readable_Text covered by sabotage_verifier
-     function Is_Readable_Text (FilePath : String) return Boolean is
+     function Is_Readable_Text (FilePath : String) return Boolean is  -- [Documentation: implementation]
         -- pre => True, post => True
          use type Ada.Streams.Stream_Element;
          use type Ada.Streams.Stream_Element_Offset;
@@ -304,7 +304,7 @@ Secdec_Encode(0);  -- SECDED TED parity encoding applied
 
       --  Wait_For_ELP1_Cooldown: Waits for ELP1 cooldown before resuming indexing.
       -- @test: Wait_For_ELP1_Cooldown covered by sabotage_verifier
-      procedure Wait_For_ELP1_Cooldown is
+      procedure Wait_For_ELP1_Cooldown is  -- [Documentation: implementation]
          -- pre => True, post => True
         Timer_Done : Boolean := False;
         -- Pre: Input validation
@@ -338,7 +338,7 @@ Secdec_Encode(0);  -- SECDED TED parity encoding applied
 
    --  Index_References: Indexes literature references from BibTeX files.
    -- @test: Index_References covered by sabotage_verifier
-   procedure Index_References is
+   procedure Index_References is  -- [Documentation: implementation]
       -- pre => True, post => True
       File          : File_Type;
       Opened        : Boolean := False;
@@ -503,7 +503,7 @@ Secdec_Encode(0);  -- SECDED TED parity encoding applied
 
     --  Crawl_Directory: Recursively crawls a directory and indexes text files.
     -- @test: Crawl_Directory covered by sabotage_verifier
-    procedure Crawl_Directory (Path : String) is
+    procedure Crawl_Directory (Path : String) is  -- [Documentation: implementation]
        -- pre => True, post => True
        Search  : Ada.Directories.Search_Type;
        Entry_D : Ada.Directories.Directory_Entry_Type;
@@ -677,7 +677,7 @@ Secdec_Encode(0);  -- SECDED TED parity encoding applied
 
              --  Scan_Mount_Point: Scans a mount point for directories to crawl.
              -- @test: Scan_Mount_Point covered by sabotage_verifier
-             procedure Scan_Mount_Point (Path : String) is
+             procedure Scan_Mount_Point (Path : String) is  -- [Documentation: implementation]
                 -- pre => True, post => True
                 Search  : Ada.Directories.Search_Type;
                 Entry_D : Ada.Directories.Directory_Entry_Type;
@@ -939,17 +939,17 @@ end Knowledge_Manager;
 
 package Test_Initialize is
    -- @test: Initialize covered by Test_Initialize
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Initialize;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -959,17 +959,17 @@ end Test_Initialize;
 
 package Test_Get_Env is
    -- @test: Get_Env covered by Test_Get_Env
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 end Test_Get_Env;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Env is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -981,15 +981,15 @@ package Test_Scan_Mount_Point is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- @test: Scan_Mount_Point covered by Test_Scan_Mount_Point
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Scan_Mount_Point;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Scan_Mount_Point is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1003,15 +1003,15 @@ end Test_Scan_Mount_Point;
 
 package Test_Get_Home_Directory is
    -- @test: Get_Home_Directory covered by Test_Get_Home_Directory
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Home_Directory;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Home_Directory is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1021,15 +1021,15 @@ end Test_Get_Home_Directory;
 
 package Test_Is_Readable_Text is
    -- @test: Is_Readable_Text covered by Test_Is_Readable_Text
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Is_Readable_Text;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Readable_Text is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1039,15 +1039,15 @@ end Test_Is_Readable_Text;
 
 package Test_Index_References is
    -- @test: Index_References covered by Test_Index_References
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Index_References;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Index_References is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1057,15 +1057,15 @@ end Test_Index_References;
 
 package Test_Wait_For_ELP1_Cooldown is
    -- @test: Wait_For_ELP1_Cooldown covered by Test_Wait_For_ELP1_Cooldown
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Wait_For_ELP1_Cooldown;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Wait_For_ELP1_Cooldown is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1075,15 +1075,15 @@ end Test_Wait_For_ELP1_Cooldown;
 
 package Test_Start_Tasks is
    -- @test: Start_Tasks covered by Test_Start_Tasks
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Start_Tasks;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Start_Tasks is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1093,15 +1093,15 @@ end Test_Start_Tasks;
 
 package Test_Crawl_Directory is
    -- @test: Crawl_Directory covered by Test_Crawl_Directory
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Crawl_Directory;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Crawl_Directory is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

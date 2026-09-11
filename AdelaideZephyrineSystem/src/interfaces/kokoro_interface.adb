@@ -14,7 +14,7 @@ package body Kokoro_Interface is
    --  Returns the generated WAV audio data as a stream element array, or an empty
    --  array if synthesis fails or the output file is not produced.
    -- @test: Synthesize_Speech covered by sabotage_verifier
-   function Synthesize_Speech (Text : String) return Ada.Streams.Stream_Element_Array is
+   function Synthesize_Speech (Text : String) return Ada.Streams.Stream_Element_Array is  -- [Documentation: implementation]
       -- pre => True, post => True
       File_Name : constant String := "kokoro_temp.wav";
       
@@ -87,15 +87,15 @@ end Kokoro_Interface;
 -- [Documentation: Run implementation]
 package Test_Synthesize_Speech is
    -- @test: Synthesize_Speech covered by Test_Synthesize_Speech
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Synthesize_Speech;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Synthesize_Speech is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

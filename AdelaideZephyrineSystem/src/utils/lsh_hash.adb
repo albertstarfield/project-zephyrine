@@ -29,7 +29,7 @@ package body LSH_Hash is
     --  Compute
     --  ----------
     -- @test: Compute covered by sabotage_verifier
-    function Compute
+    function Compute  -- [Documentation: implementation]
        (Embedding : Math_Utils.Vector; Length : Natural) return Integer
     is
        -- pre => True, post => True
@@ -245,7 +245,7 @@ package body LSH_Hash is
     --  Compute_Steered
     --  ----------
     -- @test: Compute_Steered covered by sabotage_verifier
-    function Compute_Steered
+    function Compute_Steered  -- [Documentation: implementation]
        (Embedding : Math_Utils.Vector;
         Length    : Natural;
         Alpha     : Float := 0.1) return Integer

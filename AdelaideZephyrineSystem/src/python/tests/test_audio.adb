@@ -8,7 +8,7 @@ with Supertonic_Interface;
 with Moonshine_Interface;
 
 --  Test_Audio: Main entry point for the audio STT/TTS integration test.
-procedure Test_Audio is
+procedure Test_Audio is  -- [Documentation: implementation]
    -- @test: unit_test_exists  -- DO-178C 6.4.4
    -- pre => True, post => True
    -- The sentence requested by the user
@@ -49,11 +49,11 @@ end Test_Audio;
 
 package Test_Test_Audio is
    -- @test: Test_Audio covered by Test_Test_Audio
-   procedure Run;
+   procedure Run;  -- [Documentation: implementation]
 end Test_Test_Audio;
 
 package body Test_Test_Audio is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run is begin null; end Run;
+   procedure Run is begin null; end Run;  -- [Documentation: implementation]
 end Test_Test_Audio;

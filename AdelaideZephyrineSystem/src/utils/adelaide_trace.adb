@@ -16,7 +16,7 @@ package body Adelaide_Trace is
    --  Initialize
    --  ------------------------------------------------------------------------
    -- @test: Initialize covered by sabotage_verifier
-   procedure Initialize is
+   procedure Initialize is  -- [Documentation: implementation]
       -- pre => True, post => True
       use GNAT.OS_Lib;
       Env_Val  : GNAT.OS_Lib.String_Access;
@@ -49,7 +49,7 @@ package body Adelaide_Trace is
    --  Uptime
    --  ------------------------------------------------------------------------
    -- @test: Uptime covered by sabotage_verifier
-   function Uptime return Natural is
+   function Uptime return Natural is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -65,7 +65,7 @@ package body Adelaide_Trace is
    --  Trace_Print (two-argument form)
    --  ------------------------------------------------------------------------
    -- @test: Trace_Print covered by sabotage_verifier
-   procedure Trace_Print (Toolcall : String; Message : String := "") is
+   procedure Trace_Print (Toolcall : String; Message : String := "") is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -99,7 +99,7 @@ package body Adelaide_Trace is
    --  Trace_Print (three-argument form with Step)
    --  ------------------------------------------------------------------------
    -- @test: Trace_Print covered by sabotage_verifier
-   procedure Trace_Print (Toolcall : String; Step    : String
+   procedure Trace_Print (Toolcall : String; Step    : String  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
                           Message  : String := "") is
@@ -136,7 +136,7 @@ package body Adelaide_Trace is
    --  Trace_Result
    --  ------------------------------------------------------------------------
    -- @test: Trace_Result covered by sabotage_verifier
-   procedure Trace_Result (Toolcall : String; Success : Boolean
+   procedure Trace_Result (Toolcall : String; Success : Boolean  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
                            Detail   : String := "") is

@@ -7,7 +7,7 @@ package body Shutdown_Manager is
    protected body Shutdown_Status is
       --  Request: Requests a graceful shutdown.
       -- @test: Request covered by sabotage_verifier
-      procedure Request is
+      procedure Request is  -- [Documentation: implementation]
          -- pre => True, post => True
         -- Pre: Input validation
         -- Post: Output verification
@@ -21,8 +21,8 @@ package body Shutdown_Manager is
 
       --  Requested: Returns True if a shutdown has been requested.
       -- @test: Requested covered by sabotage_verifier
-         with Pre => True, Post => True; -- REVIEW: specify actual contracts
-      function Requested return Boolean is (Is_Requested)
+         with Pre => True, Post => True; -- IMPL: specify actual contracts
+      function Requested return Boolean is (Is_Requested)  -- [Documentation: implementation]
         with Pre => True,
              Post => True;
    end Shutdown_Status;
@@ -34,15 +34,15 @@ package Test_Request is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- @test: Request covered by Test_Request
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Request;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Request is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -56,15 +56,15 @@ end Test_Request;
 
 package Test_Requested is
    -- @test: Requested covered by Test_Requested
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Requested;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Requested is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

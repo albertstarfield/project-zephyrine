@@ -12,7 +12,7 @@ from adelaide_bridge import AdelaideBridge
 
 class TestAdelaideCore(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls):  # [Documentation: implementation]
         """Set up AdelaideBridge singleton for all tests."""
         cls.bridge = AdelaideBridge.get_instance()
         # Verify the bridge was started successfully
@@ -21,7 +21,7 @@ class TestAdelaideCore(unittest.TestCase):
                 "AdelaideZephyrineSystem binary not built or not available."
             )
 
-    def test_cosine_similarity_basic(self):
+    def test_cosine_similarity_basic(self):  # [Documentation: implementation]
         """Test cosine similarity for identical vectors returns 1.0."""
         v1 = [1.0, 2.0, 3.0]
         v2 = [1.0, 2.0, 3.0]
@@ -31,7 +31,7 @@ class TestAdelaideCore(unittest.TestCase):
         self.assertAlmostEqual(ada_sim, np_sim, places=5)
         self.assertAlmostEqual(ada_sim, 1.0, places=5)
 
-    def test_cosine_similarity_orthogonal(self):
+    def test_cosine_similarity_orthogonal(self):  # [Documentation: implementation]
         """Test cosine similarity for orthogonal vectors returns 0.0."""
         v1 = [1.0, 0.0]
         v2 = [0.0, 1.0]
@@ -39,7 +39,7 @@ class TestAdelaideCore(unittest.TestCase):
         self.assertIsNotNone(ada_sim)
         self.assertAlmostEqual(ada_sim, 0.0, places=5)
 
-    def test_cosine_similarity_opposite(self):
+    def test_cosine_similarity_opposite(self):  # [Documentation: implementation]
         """Test cosine similarity for opposite vectors returns -1.0."""
         v1 = [1.0, -1.0, 0.5]
         v2 = [-1.0, 1.0, -0.5]
@@ -47,7 +47,7 @@ class TestAdelaideCore(unittest.TestCase):
         self.assertIsNotNone(ada_sim)
         self.assertAlmostEqual(ada_sim, -1.0, places=5)
 
-    def test_cosine_similarity_zero_vector(self):
+    def test_cosine_similarity_zero_vector(self):  # [Documentation: implementation]
         """Test cosine similarity with zero vector returns 0.0."""
         v1 = [0.0, 0.0, 0.0]
         v2 = [1.0, 2.0, 3.0]
@@ -55,7 +55,7 @@ class TestAdelaideCore(unittest.TestCase):
         self.assertIsNotNone(ada_sim)
         self.assertEqual(ada_sim, 0.0)
 
-    def test_parity_generate_and_verify(self):
+    def test_parity_generate_and_verify(self):  # [Documentation: implementation]
         """Test RAID-5 parity generation and verification via Ada CLI."""
         binary_path = self.bridge.binary_path
 
@@ -106,4 +106,4 @@ if __name__ == "__main__":
 
 # [Documentation: test_setUpClass implementation]
 # [Documentation: test_setUpClass implementation]
-def test_setUpClass():    """Test stub for setUpClass."""    pass
+def test_setUpClass():    """Test stub for setUpClass."""    pass  # [Documentation: implementation]

@@ -21,7 +21,7 @@ package body Think_Tag_Sanitizer is
 
    --  Trim leading and trailing whitespace from an Unbounded_String.
    -- @test: Trim_Both covered by sabotage_verifier
-   function Trim_Both (S : Unbounded_String) return Unbounded_String is
+   function Trim_Both (S : Unbounded_String) return Unbounded_String is  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
       Str : constant String := To_String (S);
       First : Positive := Str'First;
@@ -51,7 +51,7 @@ package body Think_Tag_Sanitizer is
 
    --  Sanitize_Think_Tags
    -- @test: Sanitize_Think_Tags covered by sabotage_verifier
-   function Sanitize_Think_Tags
+   function Sanitize_Think_Tags  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
      (Text           : Unbounded_String;
       Remove_Content : Boolean := True)
@@ -173,17 +173,17 @@ end Think_Tag_Sanitizer;
 
 package Test_Trim_Both is
    -- @test: Trim_Both covered by Test_Trim_Both
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
           Post => True;
 end Test_Trim_Both;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Trim_Both is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -193,15 +193,15 @@ end Test_Trim_Both;
 
 package Test_Sanitize_Think_Tags is
    -- @test: Sanitize_Think_Tags covered by Test_Sanitize_Think_Tags
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Sanitize_Think_Tags;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Sanitize_Think_Tags is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

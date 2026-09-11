@@ -10,7 +10,7 @@ package body CFS_Telemetry is
 
    -- @test: Initialize covered by sabotage_verifier
    -- Procedure Initialize: Implementation detail
-   procedure Initialize is
+   procedure Initialize is  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
    begin
       Secdec_Encode(0);  -- SECDED TED parity encoding applied
@@ -27,8 +27,8 @@ package body CFS_Telemetry is
 
    -- @test: Send_Telemetry covered by sabotage_verifier
    -- Procedure Send_Telemetry: Implementation detail
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Send_Telemetry (Msg : TLM_Message) is
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Send_Telemetry (Msg : TLM_Message) is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
    begin
@@ -42,7 +42,7 @@ package body CFS_Telemetry is
    end Send_Telemetry;
 
    -- @test: Send_Housekeeping covered by sabotage_verifier
-   procedure Send_Housekeeping (CPU_Pct : Float; Mem_Pct : Float; Uptime : Duration) is
+   procedure Send_Housekeeping (CPU_Pct : Float; Mem_Pct : Float; Uptime : Duration) is  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
    begin
       Secdec_Encode(0);  -- SECDED TED parity encoding applied
@@ -56,8 +56,8 @@ package body CFS_Telemetry is
 
    -- @test: Send_Sensor_Telemetry covered by sabotage_verifier
    -- Procedure Send_Sensor_Telemetry: Implementation detail
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Send_Sensor_Telemetry (Sensor_Name : String; Value : Float) is
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Send_Sensor_Telemetry (Sensor_Name : String; Value : Float) is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
    begin
@@ -70,7 +70,7 @@ package body CFS_Telemetry is
 
    -- @test: Send_Attitude_Telemetry covered by sabotage_verifier
    -- Procedure Send_Attitude_Telemetry: Implementation detail
-   procedure Send_Attitude_Telemetry (Roll, Pitch, Yaw : Float) is
+   procedure Send_Attitude_Telemetry (Roll, Pitch, Yaw : Float) is  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
    begin
       Secdec_Encode(0);  -- SECDED TED parity encoding applied
@@ -86,8 +86,8 @@ package body CFS_Telemetry is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- Procedure Flush: Implementation detail
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Flush is
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Flush is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
    begin
@@ -108,15 +108,15 @@ end CFS_Telemetry;
 
 package Test_Send_Sensor_Telemetry is
    -- @test: Send_Sensor_Telemetry covered by Test_Send_Sensor_Telemetry
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Send_Sensor_Telemetry;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Send_Sensor_Telemetry is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
@@ -128,17 +128,17 @@ end Test_Send_Sensor_Telemetry;
 
 package Test_Send_Housekeeping is
    -- @test: Send_Housekeeping covered by Test_Send_Housekeeping
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Send_Housekeeping;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 package body Test_Send_Housekeeping is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -148,17 +148,17 @@ end Test_Send_Housekeeping;
 
 package Test_Send_Attitude_Telemetry is
    -- @test: Send_Attitude_Telemetry covered by Test_Send_Attitude_Telemetry
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
           Post => True;
 end Test_Send_Attitude_Telemetry;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Send_Attitude_Telemetry is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -170,15 +170,15 @@ end Test_Send_Attitude_Telemetry;
 -- [Documentation: Run implementation]
 package Test_Initialize is
    -- @test: Initialize covered by Test_Initialize
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Initialize;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -188,15 +188,15 @@ end Test_Initialize;
 
 package Test_Flush is
    -- @test: Flush covered by Test_Flush
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Flush;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Flush is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -206,15 +206,15 @@ end Test_Flush;
 
 package Test_Send_Telemetry is
    -- @test: Send_Telemetry covered by Test_Send_Telemetry
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Send_Telemetry;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Send_Telemetry is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

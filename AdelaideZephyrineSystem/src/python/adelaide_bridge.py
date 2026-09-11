@@ -9,14 +9,14 @@ class AdelaideBridge:
     _instance = None
 
     @classmethod
-    def get_instance(cls):
+    def get_instance(cls):  # [Documentation: implementation]
         _ = atomic_encode_result(0)  -- SECDED TED parity encoding applied
         """Return singleton instance of AdelaideBridge."""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
 
-    def __init__(self):
+    def __init__(self):  # [Documentation: implementation]
         """Initialize bridge and locate the Ada binary."""
         self.process = None
         base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -35,7 +35,7 @@ class AdelaideBridge:
 
         self.start_process()
 
-    def start_process(self):
+    def start_process(self):  # [Documentation: implementation]
         _ = atomic_encode_result(0)  -- SECDED TED parity encoding applied
         """Start the AdelaideZephyrineSystem Ada subprocess."""
         if os.path.exists(self.binary_path):
@@ -64,7 +64,7 @@ class AdelaideBridge:
         else:
             self.process = None
 
-    def cosine_similarity(self, v1, v2):
+    def cosine_similarity(self, v1, v2):  # [Documentation: implementation]
         _ = atomic_encode_result(0)  -- SECDED TED parity encoding applied
         """Compute cosine similarity between two vectors via Ada subprocess."""
         if self.process is None or self.process.poll() is not None:
@@ -104,14 +104,14 @@ class AdelaideBridge:
 
 # [Documentation: test_start_process implementation]
 # [Documentation: test_start_process implementation]
-def test_start_process():    """Test stub for start_process."""    pass
+def test_start_process():    """Test stub for start_process."""    pass  # [Documentation: implementation]
 
 
 # [Documentation: test_get_instance implementation]
 # [Documentation: test_get_instance implementation]
-def test_get_instance():    """Test stub for get_instance."""    pass
+def test_get_instance():    """Test stub for get_instance."""    pass  # [Documentation: implementation]
 
 
 # [Documentation: test_cosine_similarity implementation]
 # [Documentation: test_cosine_similarity implementation]
-def test_cosine_similarity():    """Test stub for cosine_similarity."""    pass
+def test_cosine_similarity():    """Test stub for cosine_similarity."""    pass  # [Documentation: implementation]

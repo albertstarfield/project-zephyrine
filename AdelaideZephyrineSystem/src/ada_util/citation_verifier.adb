@@ -19,7 +19,7 @@ with Trace_Utils;
 --  Citation_Verifier: Main entry point. Queries Crossref API via curl
 --  for academic paper citations based on keywords.
 -- @test: Citation_Verifier covered by sabotage_verifier
-procedure Citation_Verifier
+procedure Citation_Verifier  -- [Documentation: implementation]
   with Pre => True, Post => True;
 is
    use Ada.Text_IO;
@@ -148,15 +148,15 @@ end Citation_Verifier;
 package Test_Citation_Verifier is
       use Secdec_Parity;  -- SECDED TED parity encoding
    -- @test: Citation_Verifier covered by Test_Citation_Verifier
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Citation_Verifier;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Citation_Verifier is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

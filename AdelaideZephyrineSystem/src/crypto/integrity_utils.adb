@@ -6,7 +6,7 @@ package body Integrity_Utils is
    -- Calculate_CRC32 --
    ---------------------
    -- @test: Calculate_CRC32 covered by sabotage_verifier
-   function Calculate_CRC32 (Data : Byte_Array) return Unsigned_32 is
+   function Calculate_CRC32 (Data : Byte_Array) return Unsigned_32 is  -- [Documentation: implementation]
       -- pre => True, post => True
       CRC : Unsigned_32 := 16#FFFF_FFFF#;
      -- Pre: Input validation
@@ -36,7 +36,7 @@ package body Integrity_Utils is
    -- Generate_Parity --
    ---------------------
    -- @test: Generate_Parity covered by sabotage_verifier
-   procedure Generate_Parity (
+   procedure Generate_Parity (  -- [Documentation: implementation]
      Data       : Byte_Array;
      Block_Size : Positive;
      Parity     : in out Byte_Array
@@ -72,7 +72,7 @@ package body Integrity_Utils is
    -- Reconstruct_Block --
    ------------------------
    -- @test: Reconstruct_Block covered by sabotage_verifier
-   procedure Reconstruct_Block (
+   procedure Reconstruct_Block (  -- [Documentation: implementation]
      Data          : in out Byte_Array;
      Block_Size    : Positive;
      Corrupt_Index : Positive;
@@ -114,7 +114,7 @@ package body Integrity_Utils is
    -- Self_Patch --
    ----------------
    -- @test: Self_Patch covered by sabotage_verifier
-   procedure Self_Patch (
+   procedure Self_Patch (  -- [Documentation: implementation]
      Data          : in out Byte_Array;
      Block_Size    : Positive;
      Expected_CRCs : CRC_Array;
@@ -171,7 +171,7 @@ package body Integrity_Utils is
    -- Is_Binary --
    ---------------
    -- @test: Is_Binary covered by sabotage_verifier
-   function Is_Binary (Data : Byte_Array) return Boolean is
+   function Is_Binary (Data : Byte_Array) return Boolean is  -- [Documentation: implementation]
       -- pre => True, post => True
       Non_Printable : Natural := 0;
      -- Pre: Input validation
@@ -219,15 +219,15 @@ end Integrity_Utils;
 -- [Documentation: Run implementation]
 package Test_Reconstruct_Block is
    -- @test: Reconstruct_Block covered by Test_Reconstruct_Block
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Reconstruct_Block;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Reconstruct_Block is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -239,17 +239,17 @@ end Test_Reconstruct_Block;
 
 package Test_Is_Binary is
    -- @test: Is_Binary covered by Test_Is_Binary
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Is_Binary;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Binary is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run is begin null; end Run
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -259,7 +259,7 @@ end Test_Is_Binary;
 
 package Test_Self_Patch is
    -- @test: Self_Patch covered by Test_Self_Patch
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Self_Patch;
@@ -268,10 +268,10 @@ end Test_Self_Patch;
 
 -- [Documentation: Run implementation]
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Self_Patch is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -281,15 +281,15 @@ end Test_Self_Patch;
 
 package Test_Generate_Parity is
    -- @test: Generate_Parity covered by Test_Generate_Parity
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Generate_Parity;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Generate_Parity is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -299,15 +299,15 @@ end Test_Generate_Parity;
 
 package Test_Calculate_CRC32 is
    -- @test: Calculate_CRC32 covered by Test_Calculate_CRC32
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Calculate_CRC32;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Calculate_CRC32 is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

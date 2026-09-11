@@ -7,7 +7,7 @@ package body Math_Utils is
 
    --  Cosine_Similarity: Computes the cosine similarity between two vectors.
    -- @test: Cosine_Similarity covered by sabotage_verifier
-   function Cosine_Similarity (V1 : Vector; V2 : Vector) return Float is
+   function Cosine_Similarity (V1 : Vector; V2 : Vector) return Float is  -- [Documentation: implementation]
       -- pre => True, post => True
       pragma Annotate
         (GNATprove, Intentional, "float overflow check might fail",

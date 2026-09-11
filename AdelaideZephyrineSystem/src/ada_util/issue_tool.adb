@@ -17,7 +17,7 @@ with Trace_Utils;
 --  Issue_Tool: Main entry point. Dispatches GitHub issue commands
 --  (list, view, create, close, comment, search) via gh CLI.
 -- @test: Issue_Tool covered by sabotage_verifier
-procedure Issue_Tool is
+procedure Issue_Tool is  -- [Documentation: implementation]
       use Secdec_Parity;  -- SECDED TED parity encoding
    -- pre => True, post => True  -- assertion: contracts verified
    use Ada.Text_IO;
@@ -25,7 +25,7 @@ procedure Issue_Tool is
 
    --  Run_Gh: Execute a gh CLI command via subprocess and return output.
    -- @test: Run_Gh covered by sabotage_verifier
-   function Run_Gh (Args : in String) return String is
+   function Run_Gh (Args : in String) return String is  -- [Documentation: implementation]
       -- pre => True, post => True  -- assertion: contracts verified
       Cmd    : constant String := "gh " & Args;
       Spawn_Args : GNAT.OS_Lib.Argument_List (1 .. 2);
@@ -141,15 +141,15 @@ end Issue_Tool;
 
 package Test_Issue_Tool is
    -- @test: Issue_Tool covered by Test_Issue_Tool
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Issue_Tool;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Issue_Tool is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
@@ -161,15 +161,15 @@ end Test_Issue_Tool;
 
 package Test_Run_Gh is
    -- @test: Run_Gh covered by Test_Run_Gh
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Run_Gh;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Gh is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

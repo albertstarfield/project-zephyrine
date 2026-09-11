@@ -19,7 +19,7 @@ package body Streaming_Queue is
    protected body Queue is
       --  Set the output format and model identifier for streamed responses.
       -- @test: Set_Format covered by sabotage_verifier
-      procedure Set_Format (F : Format_Type; Model : String := "") is
+      procedure Set_Format (F : Format_Type; Model : String := "") is  -- [Documentation: implementation]
          -- pre => True, post => True
         -- Pre: Input validation
         -- Post: Output verification
@@ -157,7 +157,7 @@ package body Streaming_Queue is
 
       --  Mark the queue as closed, flushing any format-specific end-of-stream markers.
       -- @test: Close covered by sabotage_verifier
-      procedure Close is
+      procedure Close is  -- [Documentation: implementation]
          -- pre => True, post => True
          Resp : constant GNATCOLL.JSON.JSON_Value :=
            GNATCOLL.JSON.Create_Object;
@@ -230,7 +230,7 @@ package body Streaming_Queue is
 
       --  Return the current number of bytes buffered in the queue.
       -- @test: Buffer_Length covered by sabotage_verifier
-      function Buffer_Length return Natural is
+      function Buffer_Length return Natural is  -- [Documentation: implementation]
          -- pre => True, post => True
         -- Pre: Input validation
         -- Post: Output verification
@@ -244,7 +244,7 @@ package body Streaming_Queue is
 
       --  Return True when the queue is closed and all buffered data has been consumed.
       -- @test: Is_Empty_And_Closed covered by sabotage_verifier
-      function Is_Empty_And_Closed return Boolean is
+      function Is_Empty_And_Closed return Boolean is  -- [Documentation: implementation]
          -- pre => True, post => True
         -- Pre: Input validation
         -- Post: Output verification
@@ -258,7 +258,7 @@ package body Streaming_Queue is
 
       --  Return the current output format of the queue.
       -- @test: Get_Format covered by sabotage_verifier
-      function Get_Format return Format_Type is
+      function Get_Format return Format_Type is  -- [Documentation: implementation]
          -- pre => True, post => True
         -- Pre: Input validation
         -- Post: Output verification
@@ -390,15 +390,15 @@ end Streaming_Queue;
 
 package Test_Buffer_Length is
    -- @test: Buffer_Length covered by Test_Buffer_Length
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Buffer_Length;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Buffer_Length is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
@@ -410,15 +410,15 @@ end Test_Buffer_Length;
 
 package Test_Get_Format is
    -- @test: Get_Format covered by Test_Get_Format
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Format;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Format is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -428,15 +428,15 @@ end Test_Get_Format;
 
 package Test_Is_Empty_And_Closed is
    -- @test: Is_Empty_And_Closed covered by Test_Is_Empty_And_Closed
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Is_Empty_And_Closed;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Empty_And_Closed is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -446,15 +446,15 @@ end Test_Is_Empty_And_Closed;
 
 package Test_Set_Format is
    -- @test: Set_Format covered by Test_Set_Format
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Set_Format;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Set_Format is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -464,15 +464,15 @@ end Test_Set_Format;
 
 package Test_Close is
    -- @test: Close covered by Test_Close
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Close;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Close is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

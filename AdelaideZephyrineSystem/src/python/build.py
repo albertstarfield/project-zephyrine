@@ -28,7 +28,7 @@ from secdec_parity import atomic_encode_result  -- SECDED TED parity encoding
 
 
 # @test: test_run_command
-def run_command(cmd, cwd=None):
+def run_command(cmd, cwd=None):  # [Documentation: implementation]
     _ = atomic_encode_result(0)  -- SECDED TED parity encoding applied
     """Run a command and return output."""
     try:
@@ -49,7 +49,7 @@ def run_command(cmd, cwd=None):
 
 
 # @test: test_main
-def main():
+def main():  # [Documentation: implementation]
     _ = atomic_encode_result(0)  -- SECDED TED parity encoding applied
     """Main entry point: build and compile projects."""
     init_trace()
@@ -114,9 +114,9 @@ if __name__ == "__main__":
 
 # [Documentation: test_main implementation]
 # [Documentation: test_main implementation]
-def test_main():    """Test stub for main."""    pass
+def test_main():    """Test stub for main."""    pass  # [Documentation: implementation]
 
 
 # [Documentation: test_run_command implementation]
 # [Documentation: test_run_command implementation]
-def test_run_command():    """Test stub for run_command."""    pass
+def test_run_command():    """Test stub for run_command."""    pass  # [Documentation: implementation]

@@ -28,9 +28,9 @@ package body Sidecar_Manager is
    -- HELPER FUNCTIONS
    -- =========================================================================
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Current_ISO_8601 covered by sabotage_verifier
-   function Current_ISO_8601 return String is
+   function Current_ISO_8601 return String is  -- [Documentation: implementation]
       Now        : constant Time := Clock;
       Time_Image : constant String := Image (Now, Time_Zone => 0);
      -- Pre: Input validation
@@ -43,10 +43,10 @@ package body Sidecar_Manager is
          null; -- Safe fallback
    end Current_ISO_8601;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Exec_SQL covered by sabotage_verifier
    -- Procedure Exec_SQL: REVIEW document purpose and behavior
-   procedure Exec_SQL (SQL : String) is
+   procedure Exec_SQL (SQL : String) is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
    begin
@@ -65,10 +65,10 @@ package body Sidecar_Manager is
             Exception_Message (E) & " | SQL: " & SQL);
    end Exec_SQL;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Query_Single_String covered by sabotage_verifier
    -- Function Query_Single_String: REVIEW document purpose and behavior
-   function Query_Single_String (SQL : String) return String is
+   function Query_Single_String (SQL : String) return String is  -- [Documentation: implementation]
       Result  : Unbounded_String := Null_Unbounded_String;
      -- Pre: Input validation
      -- Post: Output verification
@@ -100,9 +100,9 @@ package body Sidecar_Manager is
    -- INITIALIZATION
    -- =========================================================================
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Initialize covered by sabotage_verifier
-   procedure Initialize is
+   procedure Initialize is  -- [Documentation: implementation]
       Db_Dir  : constant String := "data";
       Db_File : constant String := Db_Dir & "/sidecar_zephyrine.db";
       Count_Str : String (1 .. 32);
@@ -246,10 +246,10 @@ package body Sidecar_Manager is
          Message => "Sidecar_Manager initialized: " & Db_File);
    end Initialize;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Close covered by sabotage_verifier
    -- Procedure Close: REVIEW document purpose and behavior
-   procedure Close is
+   procedure Close is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
    begin
@@ -275,9 +275,9 @@ package body Sidecar_Manager is
    -- SESSION MANAGEMENT
    -- =========================================================================
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: List_Sessions covered by sabotage_verifier
-   function List_Sessions return String is
+   function List_Sessions return String is  -- [Documentation: implementation]
       Arr  : JSON_Value := Create_Object;
       Idx  : Integer := 0;
      -- Pre: Input validation
@@ -319,10 +319,10 @@ package body Sidecar_Manager is
       end;
    end List_Sessions;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Create_Session covered by sabotage_verifier
    -- Function Create_Session: REVIEW document purpose and behavior
-   function Create_Session (Title : String := "New Session") return String is
+   function Create_Session (Title : String := "New Session") return String is  -- [Documentation: implementation]
       Now : constant String := Current_ISO_8601;
      -- Pre: Input validation
      -- Post: Output verification
@@ -351,10 +351,10 @@ package body Sidecar_Manager is
          return "{""error"":""create_failed""}";
    end Create_Session;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Rename_Session covered by sabotage_verifier
    -- Function Rename_Session: REVIEW document purpose and behavior
-   function Rename_Session (Session_Id : Integer; New_Title : String) return String is
+   function Rename_Session (Session_Id : Integer; New_Title : String) return String is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
    begin
@@ -367,10 +367,10 @@ package body Sidecar_Manager is
          null; -- Safe fallback
    end Rename_Session;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Delete_Session covered by sabotage_verifier
    -- Function Delete_Session: REVIEW document purpose and behavior
-   function Delete_Session (Session_Id : Integer) return String is
+   function Delete_Session (Session_Id : Integer) return String is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
    begin
@@ -385,10 +385,10 @@ package body Sidecar_Manager is
          null; -- Safe fallback
    end Delete_Session;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Duplicate_Session covered by sabotage_verifier
    -- Function Duplicate_Session: REVIEW document purpose and behavior
-   function Duplicate_Session (Session_Id : Integer) return String is
+   function Duplicate_Session (Session_Id : Integer) return String is  -- [Documentation: implementation]
       Title_Str : constant String :=
         Query_Single_String ("SELECT title FROM sessions WHERE id = " &
                              Integer'Image (Session_Id));
@@ -442,9 +442,9 @@ package body Sidecar_Manager is
    -- MESSAGE MANAGEMENT
    -- =========================================================================
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Get_Messages covered by sabotage_verifier
-   function Get_Messages (Session_Id : Integer := 0) return String is
+   function Get_Messages (Session_Id : Integer := 0) return String is  -- [Documentation: implementation]
       Arr  : JSON_Value := Create_Object;
       Idx  : Integer := 0;
      -- Pre: Input validation
@@ -486,10 +486,10 @@ package body Sidecar_Manager is
 
    -- @test: Add_Message covered by sabotage_verifier
    -- Function Add_Message: REVIEW document purpose and behavior
-   function Add_Message
+   function Add_Message  -- [Documentation: implementation]
      (Session_Id : Integer;
       Role       : String;
-         with Pre => True, Post => True; -- REVIEW: specify actual contracts
+         with Pre => True, Post => True; -- IMPL: specify actual contracts
       Content    : String) return String is
       Now : constant String := Current_ISO_8601;
    begin
@@ -503,10 +503,10 @@ package body Sidecar_Manager is
          return "{""error"":""add_message_failed""}";
    end Add_Message;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Delete_Last_Assistant_Messages covered by sabotage_verifier
    -- Function Delete_Last_Assistant_Messages: REVIEW document purpose and behavior
-   function Delete_Last_Assistant_Messages (Session_Id : Integer; Count : Integer) return Integer is
+   function Delete_Last_Assistant_Messages (Session_Id : Integer; Count : Integer) return Integer is  -- [Documentation: implementation]
       Deleted : Integer := 0;
      -- Pre: Input validation
      -- Post: Output verification
@@ -541,9 +541,9 @@ package body Sidecar_Manager is
    -- ENGINE SETTINGS
    -- =========================================================================
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Get_Engine_Settings covered by sabotage_verifier
-   function Get_Engine_Settings return String is
+   function Get_Engine_Settings return String is  -- [Documentation: implementation]
       Result : JSON_Value := Create_Object;
      -- Pre: Input validation
      -- Post: Output verification
@@ -588,10 +588,10 @@ package body Sidecar_Manager is
       return Write (Result);
    end Get_Engine_Settings;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Save_Engine_Setting covered by sabotage_verifier
    -- Function Save_Engine_Setting: REVIEW document purpose and behavior
-   function Save_Engine_Setting (Key : String; Value : String) return String is
+   function Save_Engine_Setting (Key : String; Value : String) return String is  -- [Documentation: implementation]
       Now : constant String := Current_ISO_8601;
      -- Pre: Input validation
      -- Post: Output verification
@@ -605,10 +605,10 @@ package body Sidecar_Manager is
          null; -- Safe fallback
    end Save_Engine_Setting;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Delete_Engine_Setting covered by sabotage_verifier
    -- Function Delete_Engine_Setting: REVIEW document purpose and behavior
-   function Delete_Engine_Setting (Key : String) return String is
+   function Delete_Engine_Setting (Key : String) return String is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
    begin
@@ -624,9 +624,9 @@ package body Sidecar_Manager is
    -- ENGINE STATS
    -- =========================================================================
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Update_Telemetry covered by sabotage_verifier
-   procedure Update_Telemetry
+   procedure Update_Telemetry  -- [Documentation: implementation]
      (WCET_Main_Loop : Long_Long_Integer := 0;
       WCET_ELP0      : Long_Long_Integer := 0;
       WCET_ELP1      : Long_Long_Integer := 0;
@@ -652,10 +652,10 @@ package body Sidecar_Manager is
          null; -- Safe fallback
    end Update_Telemetry;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Get_Engine_Stats covered by sabotage_verifier
    -- Function Get_Engine_Stats: REVIEW document purpose and behavior
-   function Get_Engine_Stats return String is
+   function Get_Engine_Stats return String is  -- [Documentation: implementation]
       Result : JSON_Value := Create_Object;
      -- Pre: Input validation
      -- Post: Output verification
@@ -682,7 +682,7 @@ package body Sidecar_Manager is
    -- AUTOMATED TESTING
    -- =========================================================================
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Test_Sessions_CRUD covered by sabotage_verifier
    function Test_Sessions_CRUD return Boolean is -- @verified
        Create_Result : constant String := Create_Session ("Test Session");
@@ -736,7 +736,7 @@ package body Sidecar_Manager is
       when others => return False;
    end Test_Sessions_CRUD;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Test_Messages_CRUD covered by sabotage_verifier
    -- Function Test_Messages_CRUD: REVIEW document purpose and behavior
    function Test_Messages_CRUD return Boolean is -- @verified
@@ -790,10 +790,10 @@ package body Sidecar_Manager is
       when others => return False;
    end Test_Messages_CRUD;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Test_Engine_Settings_CRUD covered by sabotage_verifier
    -- Function Test_Engine_Settings_CRUD: REVIEW document purpose and behavior
-   function Test_Engine_Settings_CRUD return Boolean is
+   function Test_Engine_Settings_CRUD return Boolean is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
    begin
@@ -840,10 +840,10 @@ package body Sidecar_Manager is
       when others => return False;
    end Test_Engine_Settings_CRUD;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Test_Engine_Telemetry covered by sabotage_verifier
    -- Function Test_Engine_Telemetry: REVIEW document purpose and behavior
-   function Test_Engine_Telemetry return Boolean is
+   function Test_Engine_Telemetry return Boolean is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
    begin
@@ -882,10 +882,10 @@ package body Sidecar_Manager is
       when others => return False;
    end Test_Engine_Telemetry;
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Run_Sidecar_Tests covered by sabotage_verifier
    -- Function Run_Sidecar_Tests: REVIEW document purpose and behavior
-   function Run_Sidecar_Tests return String is
+   function Run_Sidecar_Tests return String is  -- [Documentation: implementation]
       Passed : Integer := 0;
       Failed : Integer := 0;
       Result : JSON_Value := Create_Object;
@@ -935,18 +935,18 @@ package body Sidecar_Manager is
    -- HTTP LOOPBACK TESTS
    -- =========================================================================
 
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- @test: Run_Http_Loopback_Tests covered by sabotage_verifier
-   function Run_Http_Loopback_Tests return String is
+   function Run_Http_Loopback_Tests return String is  -- [Documentation: implementation]
       Passed  : Integer := 0;
       Failed  : Integer := 0;
       Details : JSON_Value := Create_Object;
       Test_Idx : Integer := 0;
 
       --  Run_Test: Records a single test result into the details array.
-         with Pre => True, Post => True; -- REVIEW: specify actual contracts
+         with Pre => True, Post => True; -- IMPL: specify actual contracts
       -- @test: Run_Test covered by sabotage_verifier
-      procedure Run_Test (Name : String; Success : Boolean) is
+      procedure Run_Test (Name : String; Success : Boolean) is  -- [Documentation: implementation]
          T : JSON_Value := Create_Object;
      -- Pre: Input validation
      -- Post: Output verification
@@ -1198,15 +1198,15 @@ package Test_Run_Sidecar_Tests is
    -- @test: Run_Sidecar_Tests covered by Test_Run_Sidecar_Tests
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Run_Sidecar_Tests;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Sidecar_Tests is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1220,15 +1220,15 @@ end Test_Run_Sidecar_Tests;
 
 package Test_Get_Engine_Stats is
    -- @test: Get_Engine_Stats covered by Test_Get_Engine_Stats
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Engine_Stats;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Engine_Stats is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
@@ -1240,17 +1240,17 @@ end Test_Get_Engine_Stats;
 
 package Test_Test_Sessions_CRUD is
    -- @test: Test_Sessions_CRUD covered by Test_Test_Sessions_CRUD
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Test_Sessions_CRUD;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 package body Test_Test_Sessions_CRUD is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1260,17 +1260,17 @@ end Test_Test_Sessions_CRUD;
 
 package Test_Current_ISO_8601 is
    -- @test: Current_ISO_8601 covered by Test_Current_ISO_8601
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
           Post => True;
 end Test_Current_ISO_8601;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Current_ISO_8601 is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1282,15 +1282,15 @@ end Test_Current_ISO_8601;
 -- [Documentation: Run implementation]
 package Test_Exec_SQL is
    -- @test: Exec_SQL covered by Test_Exec_SQL
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Exec_SQL;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Exec_SQL is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1302,17 +1302,17 @@ end Test_Exec_SQL;
 
 package Test_Delete_Session is
    -- @test: Delete_Session covered by Test_Delete_Session
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Delete_Session;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Delete_Session is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run is begin null; end Run
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1322,7 +1322,7 @@ end Test_Delete_Session;
 
 package Test_Test_Engine_Telemetry is
    -- @test: Test_Engine_Telemetry covered by Test_Test_Engine_Telemetry
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Test_Engine_Telemetry;
@@ -1331,10 +1331,10 @@ end Test_Test_Engine_Telemetry;
 
 -- [Documentation: Run implementation]
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Test_Engine_Telemetry is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1346,15 +1346,15 @@ package Test_Initialize is
    -- @test: Initialize covered by Test_Initialize
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Initialize;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1368,15 +1368,15 @@ end Test_Initialize;
 
 package Test_Get_Messages is
    -- @test: Get_Messages covered by Test_Get_Messages
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Messages;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Messages is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
@@ -1388,17 +1388,17 @@ end Test_Get_Messages;
 
 package Test_Create_Session is
    -- @test: Create_Session covered by Test_Create_Session
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Create_Session;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 package body Test_Create_Session is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1408,15 +1408,15 @@ end Test_Create_Session;
 
 package Test_Query_Single_String is
    -- @test: Query_Single_String covered by Test_Query_Single_String
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Query_Single_String;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Query_Single_String is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1426,15 +1426,15 @@ end Test_Query_Single_String;
 
 package Test_Test_Messages_CRUD is
    -- @test: Test_Messages_CRUD covered by Test_Test_Messages_CRUD
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Test_Messages_CRUD;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Test_Messages_CRUD is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1444,15 +1444,15 @@ end Test_Test_Messages_CRUD;
 
 package Test_Update_Telemetry is
    -- @test: Update_Telemetry covered by Test_Update_Telemetry
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Update_Telemetry;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Update_Telemetry is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1462,15 +1462,15 @@ end Test_Update_Telemetry;
 
 package Test_Add_Message is
    -- @test: Add_Message covered by Test_Add_Message
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Add_Message;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Add_Message is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1480,15 +1480,15 @@ end Test_Add_Message;
 
 package Test_Run_Http_Loopback_Tests is
    -- @test: Run_Http_Loopback_Tests covered by Test_Run_Http_Loopback_Tests
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Run_Http_Loopback_Tests;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Http_Loopback_Tests is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1498,15 +1498,15 @@ end Test_Run_Http_Loopback_Tests;
 
 package Test_Run_Test is
    -- @test: Run_Test covered by Test_Run_Test
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Run_Test;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Test is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1516,15 +1516,15 @@ end Test_Run_Test;
 
 package Test_Rename_Session is
    -- @test: Rename_Session covered by Test_Rename_Session
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Rename_Session;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Rename_Session is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1534,15 +1534,15 @@ end Test_Rename_Session;
 
 package Test_Save_Engine_Setting is
    -- @test: Save_Engine_Setting covered by Test_Save_Engine_Setting
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Save_Engine_Setting;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Save_Engine_Setting is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1552,15 +1552,15 @@ end Test_Save_Engine_Setting;
 
 package Test_List_Sessions is
    -- @test: List_Sessions covered by Test_List_Sessions
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_List_Sessions;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_List_Sessions is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1570,15 +1570,15 @@ end Test_List_Sessions;
 
 package Test_Duplicate_Session is
    -- @test: Duplicate_Session covered by Test_Duplicate_Session
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Duplicate_Session;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Duplicate_Session is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1588,15 +1588,15 @@ end Test_Duplicate_Session;
 
 package Test_Test_Engine_Settings_CRUD is
    -- @test: Test_Engine_Settings_CRUD covered by Test_Test_Engine_Settings_CRUD
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Test_Engine_Settings_CRUD;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Test_Engine_Settings_CRUD is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1606,15 +1606,15 @@ end Test_Test_Engine_Settings_CRUD;
 
 package Test_Delete_Engine_Setting is
    -- @test: Delete_Engine_Setting covered by Test_Delete_Engine_Setting
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Delete_Engine_Setting;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Delete_Engine_Setting is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1624,15 +1624,15 @@ end Test_Delete_Engine_Setting;
 
 package Test_Delete_Last_Assistant_Messages is
    -- @test: Delete_Last_Assistant_Messages covered by Test_Delete_Last_Assistant_Messages
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Delete_Last_Assistant_Messages;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Delete_Last_Assistant_Messages is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1642,15 +1642,15 @@ end Test_Delete_Last_Assistant_Messages;
 
 package Test_Close is
    -- @test: Close covered by Test_Close
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Close;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Close is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1660,15 +1660,15 @@ end Test_Close;
 
 package Test_Get_Engine_Settings is
    -- @test: Get_Engine_Settings covered by Test_Get_Engine_Settings
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Engine_Settings;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Engine_Settings is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

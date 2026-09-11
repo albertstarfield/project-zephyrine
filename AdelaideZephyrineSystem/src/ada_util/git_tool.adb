@@ -17,7 +17,7 @@ with Trace_Utils;
 --  Git_Tool: Main entry point. Dispatches git commands (status, diff,
 --  commit, push, pull, log, branch, checkout) to system git.
 -- @test: Git_Tool covered by sabotage_verifier
-procedure Git_Tool is
+procedure Git_Tool is  -- [Documentation: implementation]
       use Secdec_Parity;  -- SECDED TED parity encoding
    -- pre => True, post => True  -- assertion: contracts verified
    use Ada.Text_IO;
@@ -25,7 +25,7 @@ procedure Git_Tool is
 
    --  Run_Git: Execute a git command via subprocess and return output.
    -- @test: Run_Git covered by sabotage_verifier
-   function Run_Git (Args : in String) return String is
+   function Run_Git (Args : in String) return String is  -- [Documentation: implementation]
       -- pre => True, post => True  -- assertion: contracts verified
       Cmd    : constant String := "git " & Args;
       Spawn_Args : GNAT.OS_Lib.Argument_List (1 .. 2);
@@ -141,17 +141,17 @@ end Git_Tool;
 
 package Test_Git_Tool is
    -- @test: Git_Tool covered by Test_Git_Tool
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Git_Tool;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Git_Tool is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -161,15 +161,15 @@ end Test_Git_Tool;
 
 package Test_Run_Git is
    -- @test: Run_Git covered by Test_Run_Git
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Run_Git;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Git is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

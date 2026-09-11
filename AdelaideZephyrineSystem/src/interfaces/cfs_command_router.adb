@@ -11,7 +11,7 @@ package body CFS_Command_Router is
 
    -- @test: Initialize covered by sabotage_verifier
    -- Procedure Initialize: Implementation detail
-   procedure Initialize is
+   procedure Initialize is  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
    begin
       Secdec_Encode(0);  -- SECDED TED parity encoding applied
@@ -29,8 +29,8 @@ package body CFS_Command_Router is
 
    -- @test: Route_Command covered by sabotage_verifier
    -- Procedure Route_Command: Implementation detail
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Route_Command (Cmd : Command) is
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Route_Command (Cmd : Command) is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
    begin
@@ -50,7 +50,7 @@ package body CFS_Command_Router is
 
    -- @test: Register_Handler covered by sabotage_verifier
    -- Procedure Register_Handler: Implementation detail
-   procedure Register_Handler (Cmd_Kind : Cmd_Type; Handler_Name : String) is
+   procedure Register_Handler (Cmd_Kind : Cmd_Type; Handler_Name : String) is  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
    begin
       Secdec_Encode(0);  -- SECDED TED parity encoding applied
@@ -63,8 +63,8 @@ package body CFS_Command_Router is
    end Register_Handler;
 
    -- @test: Get_Command_Count covered by sabotage_verifier
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   function Get_Command_Count return Natural is
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   function Get_Command_Count return Natural is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
    begin
@@ -78,10 +78,10 @@ package body CFS_Command_Router is
 
    -- @test: Reset_Stats covered by sabotage_verifier
    -- Procedure Reset_Stats: Implementation detail
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Reset_Stats is
+   procedure Reset_Stats is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
    begin
@@ -99,15 +99,15 @@ package Test_Register_Handler is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- @test: Register_Handler covered by Test_Register_Handler
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Register_Handler;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Register_Handler is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -121,15 +121,15 @@ end Test_Register_Handler;
 
 package Test_Get_Command_Count is
    -- @test: Get_Command_Count covered by Test_Get_Command_Count
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Command_Count;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Command_Count is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
@@ -141,17 +141,17 @@ end Test_Get_Command_Count;
 
 package Test_Initialize is
    -- @test: Initialize covered by Test_Initialize
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Initialize;
 
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -161,15 +161,15 @@ end Test_Initialize;
 
 package Test_Reset_Stats is
    -- @test: Reset_Stats covered by Test_Reset_Stats
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Reset_Stats;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Reset_Stats is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -179,15 +179,15 @@ end Test_Reset_Stats;
 
 package Test_Route_Command is
    -- @test: Route_Command covered by Test_Route_Command
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Route_Command;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Route_Command is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

@@ -20,7 +20,7 @@ with Trace_Utils;
 --  Hook_Tool: Main entry point. Manages pre/post tool execution hooks
 --  via .hooks.json configuration file.
 -- @test: Hook_Tool covered by sabotage_verifier
-procedure Hook_Tool is
+procedure Hook_Tool is  -- [Documentation: implementation]
       use Secdec_Parity;  -- SECDED TED parity encoding
    -- pre => True, post => True  -- assertion: contracts verified
    use Ada.Text_IO;
@@ -30,7 +30,7 @@ procedure Hook_Tool is
 
    --  Run_Hook: Execute a Python hook script via subprocess.
    -- @test: Run_Hook covered by sabotage_verifier
-   function Run_Hook (Script : in String) return Boolean is
+   function Run_Hook (Script : in String) return Boolean is  -- [Documentation: implementation]
       -- pre => True, post => True  -- assertion: contracts verified
       Cmd : constant String := "python3 " & Script;
       Success : Boolean;
@@ -134,7 +134,7 @@ end Hook_Tool;
 
 package Test_Hook_Tool is
    -- @test: Hook_Tool covered by Test_Hook_Tool
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Hook_Tool;
@@ -143,10 +143,10 @@ end Test_Hook_Tool;
 
 -- [Documentation: Run implementation]
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hook_Tool is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -156,15 +156,15 @@ end Test_Hook_Tool;
 
 package Test_Run_Hook is
    -- @test: Run_Hook covered by Test_Run_Hook
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Run_Hook;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Hook is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

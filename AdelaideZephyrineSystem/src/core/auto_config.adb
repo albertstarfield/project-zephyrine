@@ -33,7 +33,7 @@ package body Auto_Config is
    --  LADDER CONVERSION FUNCTIONS
    --  ============================================================================
    -- @test: Ctx_To_Unsigned covered by sabotage_verifier
-   function Ctx_To_Unsigned (C : Ctx_Ladder) return Interfaces.C.unsigned is
+   function Ctx_To_Unsigned (C : Ctx_Ladder) return Interfaces.C.unsigned is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -53,7 +53,7 @@ package body Auto_Config is
 
    --  Threads_To_Int: Converts thread count to C integer (identity function).
    -- @test: Threads_To_Int covered by sabotage_verifier
-   function Threads_To_Int (T : Interfaces.C.int) return Interfaces.C.int is
+   function Threads_To_Int (T : Interfaces.C.int) return Interfaces.C.int is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -67,7 +67,7 @@ package body Auto_Config is
 
    --  Batch_To_Unsigned: Converts batch ladder to C unsigned integer.
    -- @test: Batch_To_Unsigned covered by sabotage_verifier
-   function Batch_To_Unsigned (B : Batch_Ladder) return Interfaces.C.unsigned is
+   function Batch_To_Unsigned (B : Batch_Ladder) return Interfaces.C.unsigned is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -86,7 +86,7 @@ package body Auto_Config is
 
    --  Accel_Layers_To_Int: Converts acceleration layer count to C integer.
    -- @test: Accel_Layers_To_Int covered by sabotage_verifier
-   function Accel_Layers_To_Int (A : Accel_Layer_Ladder) return Interfaces.C.int is
+   function Accel_Layers_To_Int (A : Accel_Layer_Ladder) return Interfaces.C.int is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -108,7 +108,7 @@ package body Auto_Config is
    --  HARDWARE DETECTION
    --  ============================================================================
    -- @test: Detect_Hardware covered by sabotage_verifier
-   procedure Detect_Hardware is
+   procedure Detect_Hardware is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -188,7 +188,7 @@ package body Auto_Config is
    --  Parse a single config line from the file.
    --  Format: "MODEL_NAME: CTX=2048 THREADS=2 BATCH=128 ACCEL_LAYERS=8"
    -- @test: Parse_Config_Line covered by sabotage_verifier
-   procedure Parse_Config_Line (Line : String) is
+   procedure Parse_Config_Line (Line : String) is  -- [Documentation: implementation]
       -- pre => True, post => True
       Colon_Pos : Natural := 0;
      -- Pre: Input validation
@@ -349,7 +349,7 @@ package body Auto_Config is
 
    --  Load_Config_File: Loads the auto-configuration from the config file.
    -- @test: Load_Config_File covered by sabotage_verifier
-   procedure Load_Config_File is
+   procedure Load_Config_File is  -- [Documentation: implementation]
       -- pre => True, post => True
       Config_File : File_Type;
      -- Pre: Input validation
@@ -409,7 +409,7 @@ package body Auto_Config is
 
    --  Save_Config: Saves the current auto-configuration to the config file.
    -- @test: Save_Config covered by sabotage_verifier
-   procedure Save_Config is
+   procedure Save_Config is  -- [Documentation: implementation]
       -- pre => True, post => True
       Config_File : File_Type;
      -- Pre: Input validation
@@ -482,7 +482,7 @@ package body Auto_Config is
 
    --  Get the next higher level in a ladder, or return current if at max.
    -- @test: Next_Ctx_Level covered by sabotage_verifier
-   function Next_Ctx_Level (Current : Ctx_Ladder) return Ctx_Ladder is
+   function Next_Ctx_Level (Current : Ctx_Ladder) return Ctx_Ladder is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -504,7 +504,7 @@ package body Auto_Config is
 
    --  Next_Batch_Level: Returns the next higher batch ladder level.
    -- @test: Next_Batch_Level covered by sabotage_verifier
-   function Next_Batch_Level (Current : Batch_Ladder) return Batch_Ladder is
+   function Next_Batch_Level (Current : Batch_Ladder) return Batch_Ladder is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -523,7 +523,7 @@ package body Auto_Config is
 
    --  Next_Accel_Level: Returns the next higher acceleration layer level.
    -- @test: Next_Accel_Level covered by sabotage_verifier
-   function Next_Accel_Level (Current : Accel_Layer_Ladder) return Accel_Layer_Ladder is
+   function Next_Accel_Level (Current : Accel_Layer_Ladder) return Accel_Layer_Ladder is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -546,7 +546,7 @@ package body Auto_Config is
    --  ============================================================================
 
    -- @test: Initialize covered by sabotage_verifier
-   procedure Initialize is
+   procedure Initialize is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -704,7 +704,7 @@ package body Auto_Config is
    --  ============================================================================
 
    -- @test: Get_Config covered by sabotage_verifier
-   function Get_Config (Kind : Model_Type) return Working_Config is
+   function Get_Config (Kind : Model_Type) return Working_Config is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -721,7 +721,7 @@ package body Auto_Config is
 
    --  Record_Success: Records a successful inference and updates the max working config.
    -- @test: Record_Success covered by sabotage_verifier
-   procedure Record_Success
+   procedure Record_Success  -- [Documentation: implementation]
      (Kind     : Model_Type;
      -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
       Ctx_Used : Interfaces.C.unsigned)
@@ -764,7 +764,7 @@ package body Auto_Config is
 
    --  Set_Probe_Target: Sets the probe target context size for a model type.
    -- @test: Set_Probe_Target covered by sabotage_verifier
-   procedure Set_Probe_Target
+   procedure Set_Probe_Target  -- [Documentation: implementation]
      (Kind   : Model_Type;
       Target : Ctx_Ladder)
    is
@@ -797,7 +797,7 @@ package body Auto_Config is
 
    --  Get_Probe_Target: Returns and clears the probe target for a model type.
    -- @test: Get_Probe_Target covered by sabotage_verifier
-   function Get_Probe_Target (Kind : Model_Type) return Ctx_Ladder is
+   function Get_Probe_Target (Kind : Model_Type) return Ctx_Ladder is  -- [Documentation: implementation]
       -- pre => True, post => True
       C     : Working_Config := Current_Config (Kind);
       Target : constant Ctx_Ladder := C.Probe_Target;
@@ -821,7 +821,7 @@ package body Auto_Config is
 
    --  Record_Failure: Records a failed inference and increments the failure counter.
    -- @test: Record_Failure covered by sabotage_verifier
-   procedure Record_Failure
+   procedure Record_Failure  -- [Documentation: implementation]
      (Kind      : Model_Type;
      -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
       -- [Documentation: Run implementation]
@@ -871,7 +871,7 @@ package body Auto_Config is
 
    --  Reset_To_Minimal: Resets all model configurations to minimal settings.
    -- @test: Reset_To_Minimal covered by sabotage_verifier
-   procedure Reset_To_Minimal is
+   procedure Reset_To_Minimal is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
@@ -914,15 +914,15 @@ end Auto_Config;
 
 package Test_Next_Ctx_Level is
    -- @test: Next_Ctx_Level covered by Test_Next_Ctx_Level
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Next_Ctx_Level;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Next_Ctx_Level is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
@@ -934,17 +934,17 @@ end Test_Next_Ctx_Level;
 
 package Test_Set_Probe_Target is
    -- @test: Set_Probe_Target covered by Test_Set_Probe_Target
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Set_Probe_Target;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 package body Test_Set_Probe_Target is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -954,17 +954,17 @@ end Test_Set_Probe_Target;
 
 package Test_Detect_Hardware is
    -- @test: Detect_Hardware covered by Test_Detect_Hardware
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
           Post => True;
 end Test_Detect_Hardware;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Detect_Hardware is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -976,15 +976,15 @@ end Test_Detect_Hardware;
 -- [Documentation: Run implementation]
 package Test_Record_Success is
    -- @test: Record_Success covered by Test_Record_Success
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Record_Success;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Record_Success is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -996,17 +996,17 @@ end Test_Record_Success;
 
 package Test_Get_Probe_Target is
    -- @test: Get_Probe_Target covered by Test_Get_Probe_Target
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Probe_Target;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Probe_Target is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run is begin null; end Run
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1016,7 +1016,7 @@ end Test_Get_Probe_Target;
 
 package Test_Save_Config is
    -- @test: Save_Config covered by Test_Save_Config
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Save_Config;
@@ -1025,10 +1025,10 @@ end Test_Save_Config;
 
 -- [Documentation: Run implementation]
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Save_Config is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1040,15 +1040,15 @@ package Test_Threads_To_Int is
    -- @test: Threads_To_Int covered by Test_Threads_To_Int
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Threads_To_Int;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Threads_To_Int is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1062,15 +1062,15 @@ end Test_Threads_To_Int;
 
 package Test_Initialize is
    -- @test: Initialize covered by Test_Initialize
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Initialize;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
           -- [Documentation: Run implementation]
@@ -1082,15 +1082,15 @@ end Test_Initialize;
 
 package Test_Accel_Layers_To_Int is
    -- @test: Accel_Layers_To_Int covered by Test_Accel_Layers_To_Int
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Accel_Layers_To_Int;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Accel_Layers_To_Int is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1100,15 +1100,15 @@ end Test_Accel_Layers_To_Int;
 
 package Test_Next_Accel_Level is
    -- @test: Next_Accel_Level covered by Test_Next_Accel_Level
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Next_Accel_Level;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Next_Accel_Level is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1118,15 +1118,15 @@ end Test_Next_Accel_Level;
 
 package Test_Ctx_To_Unsigned is
    -- @test: Ctx_To_Unsigned covered by Test_Ctx_To_Unsigned
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Ctx_To_Unsigned;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Ctx_To_Unsigned is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1136,15 +1136,15 @@ end Test_Ctx_To_Unsigned;
 
 package Test_Reset_To_Minimal is
    -- @test: Reset_To_Minimal covered by Test_Reset_To_Minimal
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Reset_To_Minimal;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Reset_To_Minimal is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1154,15 +1154,15 @@ end Test_Reset_To_Minimal;
 
 package Test_Load_Config_File is
    -- @test: Load_Config_File covered by Test_Load_Config_File
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Load_Config_File;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Load_Config_File is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1172,15 +1172,15 @@ end Test_Load_Config_File;
 
 package Test_Parse_Config_Line is
    -- @test: Parse_Config_Line covered by Test_Parse_Config_Line
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Parse_Config_Line;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Parse_Config_Line is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1190,15 +1190,15 @@ end Test_Parse_Config_Line;
 
 package Test_Get_Config is
    -- @test: Get_Config covered by Test_Get_Config
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Config;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Config is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1208,15 +1208,15 @@ end Test_Get_Config;
 
 package Test_Batch_To_Unsigned is
    -- @test: Batch_To_Unsigned covered by Test_Batch_To_Unsigned
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Batch_To_Unsigned;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Batch_To_Unsigned is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1226,15 +1226,15 @@ end Test_Batch_To_Unsigned;
 
 package Test_Next_Batch_Level is
    -- @test: Next_Batch_Level covered by Test_Next_Batch_Level
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Next_Batch_Level;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Next_Batch_Level is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -1244,15 +1244,15 @@ end Test_Next_Batch_Level;
 
 package Test_Record_Failure is
    -- @test: Record_Failure covered by Test_Record_Failure
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Record_Failure;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Record_Failure is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

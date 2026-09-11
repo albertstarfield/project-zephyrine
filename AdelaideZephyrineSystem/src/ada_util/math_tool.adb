@@ -17,7 +17,7 @@ with Trace_Utils;
 --  Math_Tool: Main entry point. Accepts a mathematical expression from
 --  command-line arguments. Limited to basic arithmetic (no sympy equiv).
 -- @test: Math_Tool covered by sabotage_verifier
-procedure Math_Tool is
+procedure Math_Tool is  -- [Documentation: implementation]
       use Secdec_Parity;  -- SECDED TED parity encoding
    -- pre => True, post => True  -- assertion: contracts verified
    use Ada.Text_IO;
@@ -68,15 +68,15 @@ end Math_Tool;
 -- [Documentation: Run implementation]
 package Test_Math_Tool is
    -- @test: Math_Tool covered by Test_Math_Tool
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Math_Tool;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Math_Tool is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

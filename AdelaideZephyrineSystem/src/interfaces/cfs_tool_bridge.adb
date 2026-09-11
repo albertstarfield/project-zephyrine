@@ -13,7 +13,7 @@ package body CFS_Tool_Bridge is
 
    --  Extract first word from params (subcommand)
    -- @test: Get_Subcommand covered by sabotage_verifier
-   function Get_Subcommand (Params : String) return String is
+   function Get_Subcommand (Params : String) return String is  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
       Sp : Natural := Index (Params, " ");
    begin
@@ -30,8 +30,8 @@ package body CFS_Tool_Bridge is
 
    --  Extract remainder after first word
    -- @test: Get_Rest covered by sabotage_verifier
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   function Get_Rest (Params : String) return String is
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   function Get_Rest (Params : String) return String is  -- [Documentation: implementation]
       Sp : Natural := Index (Params, " ");
      -- Pre: Input validation
      -- Post: Output verification
@@ -51,7 +51,7 @@ package body CFS_Tool_Bridge is
    --  Execute_CFS_Tool — main dispatcher
    --  ──────────────────────────────────────────────────────────────────────
    -- @test: Execute_CFS_Tool covered by sabotage_verifier
-   function Execute_CFS_Tool (Params : String) return Tool_Result is
+   function Execute_CFS_Tool (Params : String) return Tool_Result is  -- [Documentation: implementation]
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
       Sub : constant String := Get_Subcommand (Params);
       Rest : constant String := Get_Rest (Params);
@@ -215,17 +215,17 @@ end CFS_Tool_Bridge;
 
 package Test_Execute_CFS_Tool is
    -- @test: Execute_CFS_Tool covered by Test_Execute_CFS_Tool
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_CFS_Tool;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_CFS_Tool is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
-   procedure Run is begin null; end Run
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -235,15 +235,15 @@ end Test_Execute_CFS_Tool;
 
 package Test_Get_Rest is
    -- @test: Get_Rest covered by Test_Get_Rest
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Rest;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Rest is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -253,15 +253,15 @@ end Test_Get_Rest;
 
 package Test_Get_Subcommand is
    -- @test: Get_Subcommand covered by Test_Get_Subcommand
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Subcommand;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Subcommand is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

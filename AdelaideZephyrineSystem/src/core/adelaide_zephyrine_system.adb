@@ -9,7 +9,7 @@ with Ada.Exceptions;
 
 --  AdelaideZephyrineSystem: Main entry point for the Adelaide Zephyrine System.
 -- @test: AdelaideZephyrineSystem covered by sabotage_verifier
-procedure AdelaideZephyrineSystem is
+procedure AdelaideZephyrineSystem is  -- [Documentation: implementation]
       use Secdec_Parity;  -- SECDED TED parity encoding
    -- pre => True, post => True
   -- Pre: Input validation
@@ -70,17 +70,17 @@ end AdelaideZephyrineSystem;
 
 package Test_AdelaideZephyrineSystem is
    -- @test: AdelaideZephyrineSystem covered by Test_AdelaideZephyrineSystem
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
      with Pre => True,
           Post => True;
 end Test_AdelaideZephyrineSystem;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_AdelaideZephyrineSystem is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

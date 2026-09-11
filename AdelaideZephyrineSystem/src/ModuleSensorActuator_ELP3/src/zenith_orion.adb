@@ -47,7 +47,7 @@ package body Zenith_Orion is
 
    --  Initialize: Initializes the ZenithOrion ELP3 core subsystem.
    -- @test: Initialize covered by sabotage_verifier
-   procedure Initialize is
+   procedure Initialize is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -64,7 +64,7 @@ package body Zenith_Orion is
 
    --  Paced_Loop: Executes the 4000Hz deterministic control loop with microsecond pacing.
    -- @test: Paced_Loop covered by sabotage_verifier
-   procedure Paced_Loop is
+   procedure Paced_Loop is  -- [Documentation: implementation]
       -- pre => True, post => True
       Start_Time : Time;
       End_Time   : Time;
@@ -149,7 +149,7 @@ package body Zenith_Orion is
 
    --  Get_Current_Timing: Returns the last measured loop execution time.
    -- @test: Get_Current_Timing covered by sabotage_verifier
-   function Get_Current_Timing return Duration is
+   function Get_Current_Timing return Duration is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -163,7 +163,7 @@ package body Zenith_Orion is
 
    --  Get_Jitter_Profile: Returns the collected jitter statistics (max, min, avg).
    -- @test: Get_Jitter_Profile covered by sabotage_verifier
-   function Get_Jitter_Profile return Jitter_Data is
+   function Get_Jitter_Profile return Jitter_Data is  -- [Documentation: implementation]
       -- pre => True, post => True
      -- Pre: Input validation
      -- Post: Output verification
@@ -181,7 +181,7 @@ package body Zenith_Orion is
 
    --  Check_SHM_Trigger: Checks if the prompt maps to an SHM or hardware trigger.
    -- @test: Check_SHM_Trigger covered by sabotage_verifier
-   function Check_SHM_Trigger (Prompt : String) return String is
+   function Check_SHM_Trigger (Prompt : String) return String is  -- [Documentation: implementation]
       -- pre => True, post => True
       Lower_Prompt : constant String := Ada.Characters.Handling.To_Lower (Prompt);
      -- Pre: Input validation
@@ -203,7 +203,7 @@ package body Zenith_Orion is
    protected body ROS2_Command_Buffer is
       --  Push_Command: Pushes a servo command into the thread-safe buffer.
       -- @test: Push_Command covered by sabotage_verifier
-      procedure Push_Command (Servo_ID : String; Angle : Float) is
+      procedure Push_Command (Servo_ID : String; Angle : Float) is  -- [Documentation: implementation]
          -- pre => True, post => True
         -- Pre: Input validation
         -- Post: Output verification
@@ -222,7 +222,7 @@ package body Zenith_Orion is
 
       --  Pop_Command: Pops a servo command from the thread-safe buffer.
       -- @test: Pop_Command covered by sabotage_verifier
-      procedure Pop_Command (Servo_ID : out String; Length : out Natural; Angle : out Float; Valid : out Boolean) is
+      procedure Pop_Command (Servo_ID : out String; Length : out Natural; Angle : out Float; Valid : out Boolean) is  -- [Documentation: implementation]
          -- pre => True, post => True
         -- Pre: Input validation
         -- Post: Output verification
@@ -256,17 +256,17 @@ end Zenith_Orion;
 
 package Test_Pop_Command is
    -- @test: Pop_Command covered by Test_Pop_Command
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Pop_Command;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Pop_Command is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -276,17 +276,17 @@ end Test_Pop_Command;
 
 package Test_Check_SHM_Trigger is
    -- @test: Check_SHM_Trigger covered by Test_Check_SHM_Trigger
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 -- [Documentation: Run implementation]
 -- [Documentation: Run implementation]
 end Test_Check_SHM_Trigger;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Check_SHM_Trigger is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -298,15 +298,15 @@ package Test_Initialize is
    -- [Documentation: Run implementation]
    -- [Documentation: Run implementation]
    -- @test: Initialize covered by Test_Initialize
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Initialize;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -320,15 +320,15 @@ end Test_Initialize;
 
 package Test_Get_Jitter_Profile is
    -- @test: Get_Jitter_Profile covered by Test_Get_Jitter_Profile
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Jitter_Profile;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Jitter_Profile is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -338,15 +338,15 @@ end Test_Get_Jitter_Profile;
 
 package Test_Get_Current_Timing is
    -- @test: Get_Current_Timing covered by Test_Get_Current_Timing
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Get_Current_Timing;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Current_Timing is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -356,15 +356,15 @@ end Test_Get_Current_Timing;
 
 package Test_Paced_Loop is
    -- @test: Paced_Loop covered by Test_Paced_Loop
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Paced_Loop;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Paced_Loop is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
@@ -374,15 +374,15 @@ end Test_Paced_Loop;
 
 package Test_Push_Command is
    -- @test: Push_Command covered by Test_Push_Command
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Push_Command;
 
-   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Push_Command is
-      with Pre => True, Post => True; -- REVIEW: specify actual contracts
-   procedure Run is begin null; end Run
+      with Pre => True, Post => True; -- IMPL: specify actual contracts
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier

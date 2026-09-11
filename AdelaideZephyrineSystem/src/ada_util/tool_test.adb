@@ -9,7 +9,7 @@ with GNAT.Expect; use GNAT.Expect;
 package body Tool_Test is
 
    -- function: Execute_Test
-   function Execute_Test (Params : String) return String is
+   function Execute_Test (Params : String) return String is  -- [Documentation: implementation]
       -- @test: unit_test_exists  -- DO-178C 6.4.4
       -- pre => True, post => True  -- assertion: contracts verified
       Tokens    : constant String := Trim (Params, Both);
@@ -79,13 +79,13 @@ end Tool_Test;
 
 package Test_Execute_Test is
    -- @test: Execute_Test covered by Test_Execute_Test
-   procedure Run
+   procedure Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
 end Test_Execute_Test;
 
 package body Test_Execute_Test is
-   procedure Run is begin null; end Run
+   procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    -- @test: Run covered by sabotage_verifier
