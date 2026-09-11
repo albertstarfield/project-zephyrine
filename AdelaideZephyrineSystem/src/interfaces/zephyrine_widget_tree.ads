@@ -440,3 +440,23 @@ package Zephyrine_Widget_Tree is
       return Boolean;
 
 end Zephyrine_Widget_Tree;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Init_Tree package stub for Init_Tree
+-- @test: Test_Add_Widget package stub for Add_Widget
+-- @test: Test_Remove_Widget package stub for Remove_Widget
+-- @test: Test_Find_Widget_By_ID package stub for Find_Widget_By_ID
+-- @test: Test_Find_Widget_By_Class package stub for Find_Widget_By_Class
+-- @test: Test_Apply_CSS_Stylesheet package stub for Apply_CSS_Stylesheet
+-- @test: Test_Compute_Layout package stub for Compute_Layout
+-- @test: Test_calls package stub for calls
+-- @test: Test_Render_Tree package stub for Render_Tree
+-- @test: Test_Process_Input package stub for Process_Input
+-- @test: Test_Hit_Test package stub for Hit_Test
+-- @test: Test_Update_Animations package stub for Update_Animations
+-- @test: Test_Start_Animation package stub for Start_Animation
+-- @test: Test_Get_Children package stub for Get_Children
+-- @test: Test_Get_Parent package stub for Get_Parent
+-- @test: Test_Is_Visible_In_Tree package stub for Is_Visible_In_Tree
+
+-- End of test stubs

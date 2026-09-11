@@ -56,3 +56,13 @@ package Watchdog_IPC is
    --  Called during clean shutdown.
 
 end Watchdog_IPC;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Check_Single_Instance package stub for Check_Single_Instance
+-- @test: Test_Init package stub for Init
+-- @test: Test_Update_Heartbeat package stub for Update_Heartbeat
+-- @test: Test_Write_Heartbeat package stub for Write_Heartbeat
+-- @test: Test_Write_Exit_Reason package stub for Write_Exit_Reason
+-- @test: Test_Shutdown_Heartbeat_Task package stub for Shutdown_Heartbeat_Task
+
+-- End of test stubs

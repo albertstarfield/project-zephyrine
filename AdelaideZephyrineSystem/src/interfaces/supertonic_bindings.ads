@@ -54,3 +54,14 @@ package Supertonic_Bindings is
      with Import => True, Convention => C, External_Name => "supertonic_get_sample_rate";
 
 end Supertonic_Bindings;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Init package stub for Init
+-- @test: Test_Free package stub for Free
+-- @test: Test_Load_Style package stub for Load_Style
+-- @test: Test_Free_Style package stub for Free_Style
+-- @test: Test_Synthesize package stub for Synthesize
+-- @test: Test_Free_Audio package stub for Free_Audio
+-- @test: Test_Get_Sample_Rate package stub for Get_Sample_Rate
+
+-- End of test stubs

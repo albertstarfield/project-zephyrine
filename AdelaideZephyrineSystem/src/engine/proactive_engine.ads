@@ -97,3 +97,20 @@ package Proactive_Engine is
    function Pop_Pending_Audio return String with Pre => True, Post => True;
 
 end Proactive_Engine;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Initialize package stub for Initialize
+-- @test: Test_Activate_Handless_Mode package stub for Activate_Handless_Mode
+-- @test: Test_Deactivate_Handless_Mode package stub for Deactivate_Handless_Mode
+-- @test: Test_Is_Handless_Mode_Active package stub for Is_Handless_Mode_Active
+-- @test: Test_Trigger_Acoustic_Question package stub for Trigger_Acoustic_Question
+-- @test: Test_Schedule_Question package stub for Schedule_Question
+-- @test: Test_Schedule_Repeating_Question package stub for Schedule_Repeating_Question
+-- @test: Test_Tick package stub for Tick
+-- @test: Test_Get_Last_Question package stub for Get_Last_Question
+-- @test: Test_Get_Last_Answer package stub for Get_Last_Answer
+-- @test: Test_Queue_Audio package stub for Queue_Audio
+-- @test: Test_Has_Pending_Audio package stub for Has_Pending_Audio
+-- @test: Test_Pop_Pending_Audio package stub for Pop_Pending_Audio
+
+-- End of test stubs

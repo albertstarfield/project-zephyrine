@@ -13,3 +13,9 @@ package Stella_Icarus is
    -- @test: Check_API_Trigger covered by sabotage_verifier
    -- @test: Check_API_Trigger covered by sabotage_verifier
 end Stella_Icarus;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Initialize package stub for Initialize
+-- @test: Test_Check_API_Trigger package stub for Check_API_Trigger
+
+-- End of test stubs

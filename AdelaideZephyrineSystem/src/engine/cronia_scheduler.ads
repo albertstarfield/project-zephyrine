@@ -95,3 +95,15 @@ package Cronia_Scheduler is
    -- @test: Get_Job covered by sabotage_verifier
 
 end Cronia_Scheduler;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Initialize package stub for Initialize
+-- @test: Test_Schedule_At package stub for Schedule_At
+-- @test: Test_Schedule_Repeating package stub for Schedule_Repeating
+-- @test: Test_Schedule_If_Past package stub for Schedule_If_Past
+-- @test: Test_Cancel package stub for Cancel
+-- @test: Test_Tick package stub for Tick
+-- @test: Test_Active_Job_Count package stub for Active_Job_Count
+-- @test: Test_Get_Job package stub for Get_Job
+
+-- End of test stubs

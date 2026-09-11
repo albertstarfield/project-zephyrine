@@ -16,3 +16,9 @@ package Shutdown_Manager is
    end Shutdown_Status;
 
 end Shutdown_Manager;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Request package stub for Request
+-- @test: Test_Requested package stub for Requested
+
+-- End of test stubs

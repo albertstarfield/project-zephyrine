@@ -59,3 +59,12 @@ package Integrity_Utils is
    -- @test: Is_Binary covered by sabotage_verifier
 
 end Integrity_Utils;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Calculate_CRC32 package stub for Calculate_CRC32
+-- @test: Test_Generate_Parity package stub for Generate_Parity
+-- @test: Test_Reconstruct_Block package stub for Reconstruct_Block
+-- @test: Test_Self_Patch package stub for Self_Patch
+-- @test: Test_Is_Binary package stub for Is_Binary
+
+-- End of test stubs

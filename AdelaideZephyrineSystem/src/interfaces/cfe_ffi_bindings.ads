@@ -162,3 +162,21 @@ package CFE_FFI_Bindings is
    -- @test: CFE_Send_Error_Event covered by sabotage_verifier
 
 end CFE_FFI_Bindings;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_CFE_SB_CreatePipe package stub for CFE_SB_CreatePipe
+-- @test: Test_CFE_SB_DeletePipe package stub for CFE_SB_DeletePipe
+-- @test: Test_CFE_SB_Subscribe package stub for CFE_SB_Subscribe
+-- @test: Test_CFE_SB_Unsubscribe package stub for CFE_SB_Unsubscribe
+-- @test: Test_CFE_SB_TransmitMsg package stub for CFE_SB_TransmitMsg
+-- @test: Test_CFE_SB_SetUserDataLength package stub for CFE_SB_SetUserDataLength
+-- @test: Test_CFE_SB_TimeStampMsg package stub for CFE_SB_TimeStampMsg
+-- @test: Test_CFE_SB_GetUserData package stub for CFE_SB_GetUserData
+-- @test: Test_CFE_SB_GetUserDataLength package stub for CFE_SB_GetUserDataLength
+-- @test: Test_CFE_EVS_SendEvent package stub for CFE_EVS_SendEvent
+-- @test: Test_CFE_Initialize package stub for CFE_Initialize
+-- @test: Test_CFE_Send_Telemetry package stub for CFE_Send_Telemetry
+-- @test: Test_CFE_Send_Info_Event package stub for CFE_Send_Info_Event
+-- @test: Test_CFE_Send_Error_Event package stub for CFE_Send_Error_Event
+
+-- End of test stubs

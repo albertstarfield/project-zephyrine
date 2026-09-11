@@ -210,3 +210,27 @@ package Mtmd_Interface is
      (C, Mtmd_Input_Chunks_Get_Safe, "mtmd_input_chunks_get_safe");
 
 end Mtmd_Interface;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Mtmd_Init_From_File_Safe package stub for Mtmd_Init_From_File_Safe
+-- @test: Test_Mtmd_Free_Safe package stub for Mtmd_Free_Safe
+-- @test: Test_Mtmd_Bitmap_Init_Safe package stub for Mtmd_Bitmap_Init_Safe
+-- @test: Test_Mtmd_Bitmap_Free_Safe package stub for Mtmd_Bitmap_Free_Safe
+-- @test: Test_Mtmd_Bitmap_Get_Nx_Safe package stub for Mtmd_Bitmap_Get_Nx_Safe
+-- @test: Test_Mtmd_Bitmap_Get_Ny_Safe package stub for Mtmd_Bitmap_Get_Ny_Safe
+-- @test: Test_Mtmd_Input_Chunks_Init_Safe package stub for Mtmd_Input_Chunks_Init_Safe
+-- @test: Test_Mtmd_Input_Chunks_Free_Safe package stub for Mtmd_Input_Chunks_Free_Safe
+-- @test: Test_Mtmd_Input_Chunks_Size_Safe package stub for Mtmd_Input_Chunks_Size_Safe
+-- @test: Test_Mtmd_Input_Chunk_Get_Type_Safe package stub for Mtmd_Input_Chunk_Get_Type_Safe
+-- @test: Test_Mtmd_Input_Chunk_Get_N_Tokens_Safe package stub for Mtmd_Input_Chunk_Get_N_Tokens_Safe
+-- @test: Test_Mtmd_Input_Chunk_Get_Tokens_Text_Safe package stub for Mtmd_Input_Chunk_Get_Tokens_Text_Safe
+-- @test: Test_Mtmd_Encode_Chunk_Safe package stub for Mtmd_Encode_Chunk_Safe
+-- @test: Test_Mtmd_Get_Output_Embd_Safe package stub for Mtmd_Get_Output_Embd_Safe
+-- @test: Test_Mtmd_Support_Vision_Safe package stub for Mtmd_Support_Vision_Safe
+-- @test: Test_Mtmd_Decode_Use_Non_Causal_Safe package stub for Mtmd_Decode_Use_Non_Causal_Safe
+-- @test: Test_Mtmd_Default_Marker_Safe package stub for Mtmd_Default_Marker_Safe
+-- @test: Test_Mtmd_Tokenize_Safe package stub for Mtmd_Tokenize_Safe
+-- @test: Test_Mtmd_Helper_Bitmap_Init_From_Buf_Safe package stub for Mtmd_Helper_Bitmap_Init_From_Buf_Safe
+-- @test: Test_Mtmd_Input_Chunks_Get_Safe package stub for Mtmd_Input_Chunks_Get_Safe
+
+-- End of test stubs

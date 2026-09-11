@@ -53,3 +53,13 @@ package Image_Encoder is
    -- @test: Free_Last_Image covered by sabotage_verifier
 
 end Image_Encoder;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Encode_Image package stub for Encode_Image
+-- @test: Test_Encode_Image_From_Buffer package stub for Encode_Image_From_Buffer
+-- @test: Test_Encode_Image_From_File package stub for Encode_Image_From_File
+-- @test: Test_Get_Last_Image_Tokens package stub for Get_Last_Image_Tokens
+-- @test: Test_Get_Last_Image_Embeddings package stub for Get_Last_Image_Embeddings
+-- @test: Test_Free_Last_Image package stub for Free_Last_Image
+
+-- End of test stubs

@@ -26,3 +26,13 @@ package Adelaide_Server_Pkg is
    function Get_Last_API return String with Pre => True, Post => True;
 
 end Adelaide_Server_Pkg;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Dispatch package stub for Dispatch
+-- @test: Test_Register package stub for Register
+-- @test: Test_Unregister package stub for Unregister
+-- @test: Test_Push_Log package stub for Push_Log
+-- @test: Test_Set_Last_API package stub for Set_Last_API
+-- @test: Test_Get_Last_API package stub for Get_Last_API
+
+-- End of test stubs

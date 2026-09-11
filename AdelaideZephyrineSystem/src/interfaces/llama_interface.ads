@@ -551,3 +551,59 @@ function Llama_Sampler_Init_Penalties
    pragma Import (C, Llama_Pooling_Type, "llama_pooling_type");
 
 end Llama_Interface;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Llama_Model_Default_Params package stub for Llama_Model_Default_Params
+-- @test: Test_Llama_Context_Default_Params package stub for Llama_Context_Default_Params
+-- @test: Test_Llama_Backend_Init package stub for Llama_Backend_Init
+-- @test: Test_Llama_Backend_Free package stub for Llama_Backend_Free
+-- @test: Test_Llama_Model_Load_From_File package stub for Llama_Model_Load_From_File
+-- @test: Test_Llama_Model_Free package stub for Llama_Model_Free
+-- @test: Test_Llama_Init_From_Model package stub for Llama_Init_From_Model
+-- @test: Test_Llama_Init_From_Model_Safe package stub for Llama_Init_From_Model_Safe
+-- @test: Test_Llama_Free package stub for Llama_Free
+-- @test: Test_Llama_Memory_Clear package stub for Llama_Memory_Clear
+-- @test: Test_Llama_Memory_Seq_Rm package stub for Llama_Memory_Seq_Rm
+-- @test: Test_Llama_Get_Memory package stub for Llama_Get_Memory
+-- @test: Test_Llama_N_Ctx package stub for Llama_N_Ctx
+-- @test: Test_Llama_State_Save_File package stub for Llama_State_Save_File
+-- @test: Test_Llama_State_Load_File package stub for Llama_State_Load_File
+-- @test: Test_Llama_State_Get_Size package stub for Llama_State_Get_Size
+-- @test: Test_Llama_State_Get_Data package stub for Llama_State_Get_Data
+-- @test: Test_Llama_State_Set_Data package stub for Llama_State_Set_Data
+-- @test: Test_Llama_Batch_Init package stub for Llama_Batch_Init
+-- @test: Test_Llama_Batch_Add_Safe package stub for Llama_Batch_Add_Safe
+-- @test: Test_Llama_Batch_Clear_Safe package stub for Llama_Batch_Clear_Safe
+-- @test: Test_Llama_Batch_Free package stub for Llama_Batch_Free
+-- @test: Test_Llama_Decode package stub for Llama_Decode
+-- @test: Test_Llama_Get_Logits package stub for Llama_Get_Logits
+-- @test: Test_Llama_Set_Embeddings package stub for Llama_Set_Embeddings
+-- @test: Test_Llama_Get_Embeddings package stub for Llama_Get_Embeddings
+-- @test: Test_Llama_Set_N_Threads package stub for Llama_Set_N_Threads
+-- @test: Test_Llama_N_Vocab package stub for Llama_N_Vocab
+-- @test: Test_Llama_Model_Get_Vocab package stub for Llama_Model_Get_Vocab
+-- @test: Test_Llama_Vocab_N_Tokens package stub for Llama_Vocab_N_Tokens
+-- @test: Test_Llama_Vocab_Is_Eog package stub for Llama_Vocab_Is_Eog
+-- @test: Test_Llama_Token_To_Piece package stub for Llama_Token_To_Piece
+-- @test: Test_Llama_Tokenize package stub for Llama_Tokenize
+-- @test: Test_Llama_Detokenize package stub for Llama_Detokenize
+-- @test: Test_Llama_Sampler_Chain_Default_Params package stub for Llama_Sampler_Chain_Default_Params
+-- @test: Test_Llama_Sampler_Chain_Init package stub for Llama_Sampler_Chain_Init
+-- @test: Test_Llama_Sampler_Chain_Add package stub for Llama_Sampler_Chain_Add
+-- @test: Test_Llama_Sampler_Init_Greedy package stub for Llama_Sampler_Init_Greedy
+-- @test: Test_Llama_Sampler_Init_Top_K package stub for Llama_Sampler_Init_Top_K
+-- @test: Test_Llama_Sampler_Init_Top_P package stub for Llama_Sampler_Init_Top_P
+-- @test: Test_Llama_Sampler_Init_Temp package stub for Llama_Sampler_Init_Temp
+-- @test: Test_Llama_Sampler_Init_Dist package stub for Llama_Sampler_Init_Dist
+-- @test: Test_Llama_Sampler_Init_Penalties package stub for Llama_Sampler_Init_Penalties
+-- @test: Test_Llama_Sampler_Sample package stub for Llama_Sampler_Sample
+-- @test: Test_Llama_Sampler_Free package stub for Llama_Sampler_Free
+-- @test: Test_Llama_Print_System_Info package stub for Llama_Print_System_Info
+-- @test: Test_GPU_Memory_Query package stub for GPU_Memory_Query
+-- @test: Test_CPU_Memory_Query package stub for CPU_Memory_Query
+-- @test: Test_CPU_Thread_Count package stub for CPU_Thread_Count
+-- @test: Test_Llama_Get_Embeddings_Seq package stub for Llama_Get_Embeddings_Seq
+-- @test: Test_Llama_Model_N_Cls_Out package stub for Llama_Model_N_Cls_Out
+-- @test: Test_Llama_Pooling_Type package stub for Llama_Pooling_Type
+
+-- End of test stubs

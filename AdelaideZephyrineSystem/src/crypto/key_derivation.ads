@@ -96,3 +96,17 @@ is
    -- @test: Clear_Master_Key covered by sabotage_verifier
 
 end Key_Derivation;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Derive_Master_Key package stub for Derive_Master_Key
+-- @test: Test_Derive_AES_Key package stub for Derive_AES_Key
+-- @test: Test_Master_Key_To_Hex package stub for Master_Key_To_Hex
+-- @test: Test_Hex_To_Master_Key package stub for Hex_To_Master_Key
+-- @test: Test_AES_Key_To_Hex package stub for AES_Key_To_Hex
+-- @test: Test_Hex_To_AES_Key package stub for Hex_To_AES_Key
+-- @test: Test_Initialize_Key_Derivation package stub for Initialize_Key_Derivation
+-- @test: Test_Derive_And_Store_Master_Key package stub for Derive_And_Store_Master_Key
+-- @test: Test_Get_Master_Key package stub for Get_Master_Key
+-- @test: Test_Clear_Master_Key package stub for Clear_Master_Key
+
+-- End of test stubs

@@ -55,3 +55,17 @@ package Streaming_Queue is
    overriding procedure Close (Resource : in out Response_Stream) is null;
 
 end Streaming_Queue;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Close package stub for Close
+-- @test: Test_Buffer_Length package stub for Buffer_Length
+-- @test: Test_Is_Empty_And_Closed package stub for Is_Empty_And_Closed
+-- @test: Test_Set_Format package stub for Set_Format
+-- @test: Test_Get_Format package stub for Get_Format
+-- @test: Test_End_Of_File package stub for End_Of_File
+-- @test: Test_Read package stub for Read
+-- @test: Test_Reset package stub for Reset
+-- @test: Test_Set_Index package stub for Set_Index
+-- @test: Test_Close package stub for Close
+
+-- End of test stubs

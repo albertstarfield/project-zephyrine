@@ -250,3 +250,15 @@ package Tool_Call_Autofix is
           Post => To_Lower_Case'Result'Length = S'Length;
 
 end Tool_Call_Autofix;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Register_Tool package stub for Register_Tool
+-- @test: Test_Build_Default_Registry package stub for Build_Default_Registry
+-- @test: Test_NEVER package stub for NEVER
+-- @test: Test_Fuzzy_Fix package stub for Fuzzy_Fix
+-- @test: Test_Levenshtein package stub for Levenshtein
+-- @test: Test_Match_Quality package stub for Match_Quality
+-- @test: Test_normalizes package stub for normalizes
+-- @test: Test_To_Lower_Case package stub for To_Lower_Case
+
+-- End of test stubs

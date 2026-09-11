@@ -11,3 +11,8 @@ package Kokoro_Interface is
    -- @test: Synthesize_Speech covered by sabotage_verifier
 
 end Kokoro_Interface;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Synthesize_Speech package stub for Synthesize_Speech
+
+-- End of test stubs

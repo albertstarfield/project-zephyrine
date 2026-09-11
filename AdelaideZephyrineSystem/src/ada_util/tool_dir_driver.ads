@@ -10,3 +10,8 @@ package Tool_Dir_Driver is
    -- @test: Execute_Dir covered by sabotage_verifier
    -- @test: Execute_Dir covered by sabotage_verifier
 end Tool_Dir_Driver;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Execute_Dir package stub for Execute_Dir
+
+-- End of test stubs

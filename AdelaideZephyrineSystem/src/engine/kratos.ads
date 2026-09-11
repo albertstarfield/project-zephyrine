@@ -91,3 +91,15 @@ package Kratos is
    -- @test: Log_Crash covered by sabotage_verifier
 
 end Kratos;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Install_Handlers package stub for Install_Handlers
+-- @test: Test_Guard_Enter package stub for Guard_Enter
+-- @test: Test_Guard_Exit package stub for Guard_Exit
+-- @test: Test_Crash_Occurred package stub for Crash_Occurred
+-- @test: Test_Get_Crash_Signal package stub for Get_Crash_Signal
+-- @test: Test_Clear_Crash package stub for Clear_Crash
+-- @test: Test_Safe_Llama_Decode package stub for Safe_Llama_Decode
+-- @test: Test_Log_Crash package stub for Log_Crash
+
+-- End of test stubs

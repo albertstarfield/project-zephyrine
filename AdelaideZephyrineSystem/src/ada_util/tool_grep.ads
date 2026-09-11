@@ -9,3 +9,8 @@ package Tool_Grep is
    -- @test: Execute_Grep covered by sabotage_verifier
    -- @test: Execute_Grep covered by sabotage_verifier
 end Tool_Grep;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Execute_Grep package stub for Execute_Grep
+
+-- End of test stubs

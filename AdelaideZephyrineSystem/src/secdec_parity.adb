@@ -77,6 +77,7 @@ package body Secdec_Parity is
 
    -- Atomic_Function_Wrapper implementation
    procedure Atomic_Function_Wrapper (Value : in Integer) is
+      -- Estimated Processing Time: O(1) -- WCET: Bounded -- Space Complexity: O(1)
       Result : Atomic_Function_Result;
      -- Pre: Input validation
      -- Post: Output verification

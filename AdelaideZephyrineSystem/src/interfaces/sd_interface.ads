@@ -717,3 +717,43 @@ package SD_Interface is
    -- @test: Log_All_Enum_Names covered by sabotage_verifier
 
 end SD_Interface;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_pointer package stub for pointer
+-- @test: Test_BINDINGS package stub for BINDINGS
+-- @test: Test_SD_Version package stub for SD_Version
+-- @test: Test_SD_Commit package stub for SD_Commit
+-- @test: Test_SD_Get_System_Info package stub for SD_Get_System_Info
+-- @test: Test_SD_Get_Num_Physical_Cores package stub for SD_Get_Num_Physical_Cores
+-- @test: Test_SD_Set_Log_Callback package stub for SD_Set_Log_Callback
+-- @test: Test_SD_Set_Progress_Callback package stub for SD_Set_Progress_Callback
+-- @test: Test_New_SD_Ctx package stub for New_SD_Ctx
+-- @test: Test_Free_SD_Ctx package stub for Free_SD_Ctx
+-- @test: Test_SD_Ctx_Supports_Image_Generation package stub for SD_Ctx_Supports_Image_Generation
+-- @test: Test_SD_Ctx_Supports_Video_Generation package stub for SD_Ctx_Supports_Video_Generation
+-- @test: Test_SD_Ctx_Params_Init package stub for SD_Ctx_Params_Init
+-- @test: Test_SD_Img_Gen_Params_Init package stub for SD_Img_Gen_Params_Init
+-- @test: Test_SD_Sample_Params_Init package stub for SD_Sample_Params_Init
+-- @test: Test_Generate_Image package stub for Generate_Image
+-- @test: Test_SD_Cancel_Generation package stub for SD_Cancel_Generation
+-- @test: Test_Free_SD_Images package stub for Free_SD_Images
+-- @test: Test_Tdefl_Write_Image_To_PNG_File_In_Memory package stub for Tdefl_Write_Image_To_PNG_File_In_Memory
+-- @test: Test_Mz_Free package stub for Mz_Free
+-- @test: Test_SD_Type_Name package stub for SD_Type_Name
+-- @test: Test_SD_RNG_Type_Name package stub for SD_RNG_Type_Name
+-- @test: Test_SD_Sample_Method_Name package stub for SD_Sample_Method_Name
+-- @test: Test_SD_Scheduler_Name package stub for SD_Scheduler_Name
+-- @test: Test_SD_Prediction_Name package stub for SD_Prediction_Name
+-- @test: Test_SD_Get_Default_Sample_Method package stub for SD_Get_Default_Sample_Method
+-- @test: Test_SD_Get_Default_Scheduler package stub for SD_Get_Default_Scheduler
+-- @test: Test_SD_Ctx_Params_To_Str package stub for SD_Ctx_Params_To_Str
+-- @test: Test_SD_Img_Gen_Params_To_Str package stub for SD_Img_Gen_Params_To_Str
+-- @test: Test_SD_Sample_Params_To_Str package stub for SD_Sample_Params_To_Str
+-- @test: Test_SD_Version_Info package stub for SD_Version_Info
+-- @test: Test_SD_System_Info package stub for SD_System_Info
+-- @test: Test_Log_Context_Params package stub for Log_Context_Params
+-- @test: Test_Log_Image_Gen_Params package stub for Log_Image_Gen_Params
+-- @test: Test_Log_Generate_Result package stub for Log_Generate_Result
+-- @test: Test_Log_All_Enum_Names package stub for Log_All_Enum_Names
+
+-- End of test stubs

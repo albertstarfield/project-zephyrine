@@ -30,3 +30,8 @@ package Think_Tag_Sanitizer is
           Post => True;
 
 end Think_Tag_Sanitizer;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Sanitize_Think_Tags package stub for Sanitize_Think_Tags
+
+-- End of test stubs

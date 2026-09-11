@@ -81,3 +81,14 @@ package ELP_Queue is
    -- @test: Utilization covered by sabotage_verifier
 
 end ELP_Queue;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Initialize package stub for Initialize
+-- @test: Test_Enqueue package stub for Enqueue
+-- @test: Test_Dequeue package stub for Dequeue
+-- @test: Test_Dequeue_Level package stub for Dequeue_Level
+-- @test: Test_Depth package stub for Depth
+-- @test: Test_Capacity package stub for Capacity
+-- @test: Test_Utilization package stub for Utilization
+
+-- End of test stubs

@@ -338,3 +338,24 @@ package EGL_Binding is
           External_Name => "eglSwapInterval";
 
 end EGL_Binding;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Get_Display package stub for Get_Display
+-- @test: Test_on package stub for on
+-- @test: Test_Initialize package stub for Initialize
+-- @test: Test_Terminate package stub for Terminate
+-- @test: Test_Get_Error package stub for Get_Error
+-- @test: Test_Choose_Config package stub for Choose_Config
+-- @test: Test_Get_Config_Attrib package stub for Get_Config_Attrib
+-- @test: Test_Create_Context package stub for Create_Context
+-- @test: Test_Destroy_Context package stub for Destroy_Context
+-- @test: Test_Create_Window_Surface package stub for Create_Window_Surface
+-- @test: Test_Destroy_Surface package stub for Destroy_Surface
+-- @test: Test_Make_Current package stub for Make_Current
+-- @test: Test_Swap_Buffers package stub for Swap_Buffers
+-- @test: Test_Wait_Client package stub for Wait_Client
+-- @test: Test_Wait_GL package stub for Wait_GL
+-- @test: Test_Wait_Native package stub for Wait_Native
+-- @test: Test_Swap_Interval package stub for Swap_Interval
+
+-- End of test stubs

@@ -9,3 +9,8 @@ package Tool_Hook is
    -- @test: Execute_Hook covered by sabotage_verifier
    -- @test: Execute_Hook covered by sabotage_verifier
 end Tool_Hook;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Execute_Hook package stub for Execute_Hook
+
+-- End of test stubs

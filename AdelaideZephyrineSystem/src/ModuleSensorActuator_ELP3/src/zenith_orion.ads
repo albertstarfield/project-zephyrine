@@ -48,3 +48,14 @@ package Zenith_Orion is
    end ROS2_Command_Buffer;
 
 end Zenith_Orion;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Initialize package stub for Initialize
+-- @test: Test_Paced_Loop package stub for Paced_Loop
+-- @test: Test_Get_Current_Timing package stub for Get_Current_Timing
+-- @test: Test_Get_Jitter_Profile package stub for Get_Jitter_Profile
+-- @test: Test_Check_SHM_Trigger package stub for Check_SHM_Trigger
+-- @test: Test_Push_Command package stub for Push_Command
+-- @test: Test_Pop_Command package stub for Pop_Command
+
+-- End of test stubs

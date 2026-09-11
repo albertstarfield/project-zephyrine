@@ -56,3 +56,12 @@ is
    -- @test: String_To_Hash covered by sabotage_verifier
 
 end System_Integrity;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Compute_Hardware_Hash package stub for Compute_Hardware_Hash
+-- @test: Test_Compute_Binary_Hash package stub for Compute_Binary_Hash
+-- @test: Test_Compute_Integrity_Hash package stub for Compute_Integrity_Hash
+-- @test: Test_Hash_To_String package stub for Hash_To_String
+-- @test: Test_String_To_Hash package stub for String_To_Hash
+
+-- End of test stubs

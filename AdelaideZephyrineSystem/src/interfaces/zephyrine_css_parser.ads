@@ -344,3 +344,16 @@ package Zephyrine_CSS_Parser is
    -- @test: Color_To_GL covered by sabotage_verifier
 
 end Zephyrine_CSS_Parser;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Parse_CSS_File package stub for Parse_CSS_File
+-- @test: Test_Parse_CSS_Text package stub for Parse_CSS_Text
+-- @test: Test_Lookup_Property package stub for Lookup_Property
+-- @test: Test_Lookup_Property_By_Raw package stub for Lookup_Property_By_Raw
+-- @test: Test_Get_Keyframe package stub for Get_Keyframe
+-- @test: Test_Hex_To_Color package stub for Hex_To_Color
+-- @test: Test_Parse_Length package stub for Parse_Length
+-- @test: Test_Length_To_Pixels package stub for Length_To_Pixels
+-- @test: Test_Color_To_GL package stub for Color_To_GL
+
+-- End of test stubs

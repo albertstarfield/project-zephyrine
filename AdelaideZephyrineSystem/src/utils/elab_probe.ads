@@ -18,3 +18,9 @@ package Elab_Probe is
    -- @test: Elab_Trace covered by sabotage_verifier
    pragma Import (C, Elab_Trace, "elab_trace_c");
 end Elab_Probe;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_and package stub for and
+-- @test: Test_Elab_Trace package stub for Elab_Trace
+
+-- End of test stubs

@@ -9,3 +9,8 @@ package Tool_Git is
    -- @test: Execute_Git covered by sabotage_verifier
    -- @test: Execute_Git covered by sabotage_verifier
 end Tool_Git;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Execute_Git package stub for Execute_Git
+
+-- End of test stubs

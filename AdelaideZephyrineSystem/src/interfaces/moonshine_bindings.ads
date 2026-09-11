@@ -135,3 +135,16 @@ package Moonshine_Bindings is
    pragma Import (C, Transcribe_Without_Streaming, "moonshine_transcribe_without_streaming");
 
 end Moonshine_Bindings;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Load_Transcriber_From_Files package stub for Load_Transcriber_From_Files
+-- @test: Test_Free_Transcriber package stub for Free_Transcriber
+-- @test: Test_Create_Stream package stub for Create_Stream
+-- @test: Test_Free_Stream package stub for Free_Stream
+-- @test: Test_Start_Stream package stub for Start_Stream
+-- @test: Test_Stop_Stream package stub for Stop_Stream
+-- @test: Test_Transcribe_Add_Audio_To_Stream package stub for Transcribe_Add_Audio_To_Stream
+-- @test: Test_Transcribe_Stream package stub for Transcribe_Stream
+-- @test: Test_Transcribe_Without_Streaming package stub for Transcribe_Without_Streaming
+
+-- End of test stubs

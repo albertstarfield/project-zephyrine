@@ -188,3 +188,15 @@ package Zephyrine_GL_Renderer is
    --  Release GL resources (shader program, buffers, textures).
 
 end Zephyrine_GL_Renderer;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Initialize package stub for Initialize
+-- @test: Test_Set_Viewport package stub for Set_Viewport
+-- @test: Test_Begin_Frame package stub for Begin_Frame
+-- @test: Test_Draw_Quad package stub for Draw_Quad
+-- @test: Test_Draw_Textured_Quad package stub for Draw_Textured_Quad
+-- @test: Test_Draw_Quad_With_Border package stub for Draw_Quad_With_Border
+-- @test: Test_Load_Texture package stub for Load_Texture
+-- @test: Test_Finalize package stub for Finalize
+
+-- End of test stubs

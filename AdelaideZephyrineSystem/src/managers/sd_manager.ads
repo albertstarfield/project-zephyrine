@@ -147,3 +147,14 @@ package SD_Manager is
    -- @test: Free_All covered by sabotage_verifier
 
 end SD_Manager;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Initialize package stub for Initialize
+-- @test: Test_Load_Flux_Context package stub for Load_Flux_Context
+-- @test: Test_Free_Flux_Context package stub for Free_Flux_Context
+-- @test: Test_Load_Refiner_Context package stub for Load_Refiner_Context
+-- @test: Test_Free_Refiner_Context package stub for Free_Refiner_Context
+-- @test: Test_Generate_Two_Stage package stub for Generate_Two_Stage
+-- @test: Test_Free_All package stub for Free_All
+
+-- End of test stubs

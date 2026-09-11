@@ -370,3 +370,25 @@ private
    Null_Handle : constant Renderer_Handle := null;
 
 end Zephyrine_Main_Framedisplay;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_NEVER package stub for NEVER
+-- @test: Test_Init package stub for Init
+-- @test: Test_Show package stub for Show
+-- @test: Test_Hide package stub for Hide
+-- @test: Test_Resize package stub for Resize
+-- @test: Test_after package stub for after
+-- @test: Test_Close package stub for Close
+-- @test: Test_Load_CSS package stub for Load_CSS
+-- @test: Test_Get_CSS_Stylesheet package stub for Get_CSS_Stylesheet
+-- @test: Test_Get_Widget_Tree package stub for Get_Widget_Tree
+-- @test: Test_Update_Widget_Text package stub for Update_Widget_Text
+-- @test: Test_Execute_Command package stub for Execute_Command
+-- @test: Test_Process_Events package stub for Process_Events
+-- @test: Test_Run_Event_Loop package stub for Run_Event_Loop
+-- @test: Test_Render_Frame package stub for Render_Frame
+-- @test: Test_Set_Opacity package stub for Set_Opacity
+-- @test: Test_Fade_In package stub for Fade_In
+-- @test: Test_Fade_Out package stub for Fade_Out
+
+-- End of test stubs

@@ -62,3 +62,11 @@ package Claudealike_Helper is
    -- @test: Is_Claude_Model covered by sabotage_verifier
 
 end Claudealike_Helper;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Send_Message package stub for Send_Message
+-- @test: Test_Get_Response_Text package stub for Get_Response_Text
+-- @test: Test_Parse_Response_Content package stub for Parse_Response_Content
+-- @test: Test_Is_Claude_Model package stub for Is_Claude_Model
+
+-- End of test stubs

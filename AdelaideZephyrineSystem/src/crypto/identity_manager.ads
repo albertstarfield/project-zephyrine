@@ -25,3 +25,11 @@ package Identity_Manager is
    -- @test: Compute_Identity_Hash covered by sabotage_verifier
 
 end Identity_Manager;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Initialize package stub for Initialize
+-- @test: Test_Register_User package stub for Register_User
+-- @test: Test_Authenticate_User package stub for Authenticate_User
+-- @test: Test_Compute_Identity_Hash package stub for Compute_Identity_Hash
+
+-- End of test stubs

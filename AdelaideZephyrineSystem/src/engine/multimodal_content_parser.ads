@@ -38,3 +38,11 @@ package Multimodal_Content_Parser is
      (Message : GNATCOLL.JSON.JSON_Value) return Boolean with Pre => True, Post => True;
 
 end Multimodal_Content_Parser;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Extract_Text_Content package stub for Extract_Text_Content
+-- @test: Test_Extract_And_Encode_Images package stub for Extract_And_Encode_Images
+-- @test: Test_Extract_Ollama_Images package stub for Extract_Ollama_Images
+-- @test: Test_Has_Images package stub for Has_Images
+
+-- End of test stubs

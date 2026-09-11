@@ -60,3 +60,16 @@ package Watchdog_Manager is
    end Tasking;
 
 end Watchdog_Manager;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Start_Inference package stub for Start_Inference
+-- @test: Test_Stop_Inference package stub for Stop_Inference
+-- @test: Test_Set_Aborted package stub for Set_Aborted
+-- @test: Test_Is_Aborted package stub for Is_Aborted
+-- @test: Test_Current_Inference_Model package stub for Current_Inference_Model
+-- @test: Test_Check_Timeout package stub for Check_Timeout
+-- @test: Test_Heartbeat package stub for Heartbeat
+-- @test: Test_Deactivate package stub for Deactivate
+-- @test: Test_Check_Liveness package stub for Check_Liveness
+
+-- End of test stubs

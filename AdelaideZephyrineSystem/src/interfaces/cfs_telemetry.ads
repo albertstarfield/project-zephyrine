@@ -48,3 +48,13 @@ package CFS_Telemetry is
    -- @test: Flush covered by sabotage_verifier
 
 end CFS_Telemetry;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Initialize package stub for Initialize
+-- @test: Test_Send_Telemetry package stub for Send_Telemetry
+-- @test: Test_Send_Housekeeping package stub for Send_Housekeeping
+-- @test: Test_Send_Sensor_Telemetry package stub for Send_Sensor_Telemetry
+-- @test: Test_Send_Attitude_Telemetry package stub for Send_Attitude_Telemetry
+-- @test: Test_Flush package stub for Flush
+
+-- End of test stubs

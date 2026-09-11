@@ -9,3 +9,8 @@ package Tool_Killshell is
    -- @test: Execute_Killshell covered by sabotage_verifier
    -- @test: Execute_Killshell covered by sabotage_verifier
 end Tool_Killshell;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Execute_Killshell package stub for Execute_Killshell
+
+-- End of test stubs

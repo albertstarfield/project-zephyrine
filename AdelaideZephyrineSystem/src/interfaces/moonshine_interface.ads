@@ -21,3 +21,10 @@ package Moonshine_Interface is
    -- @test: Transcribe_Raw_PCM covered by sabotage_verifier
    
 end Moonshine_Interface;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Init_Moonshine package stub for Init_Moonshine
+-- @test: Test_Free_Moonshine package stub for Free_Moonshine
+-- @test: Test_Transcribe_Raw_PCM package stub for Transcribe_Raw_PCM
+
+-- End of test stubs

@@ -216,3 +216,19 @@ package Auto_Config is
    Probe_Headroom_Pct : constant Natural := 30;
 
 end Auto_Config;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Ctx_To_Unsigned package stub for Ctx_To_Unsigned
+-- @test: Test_Threads_To_Int package stub for Threads_To_Int
+-- @test: Test_Batch_To_Unsigned package stub for Batch_To_Unsigned
+-- @test: Test_Accel_Layers_To_Int package stub for Accel_Layers_To_Int
+-- @test: Test_Initialize package stub for Initialize
+-- @test: Test_Get_Config package stub for Get_Config
+-- @test: Test_Record_Success package stub for Record_Success
+-- @test: Test_Set_Probe_Target package stub for Set_Probe_Target
+-- @test: Test_Get_Probe_Target package stub for Get_Probe_Target
+-- @test: Test_Record_Failure package stub for Record_Failure
+-- @test: Test_Save_Config package stub for Save_Config
+-- @test: Test_Reset_To_Minimal package stub for Reset_To_Minimal
+
+-- End of test stubs

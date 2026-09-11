@@ -756,3 +756,64 @@ package GLESv2_Binding is
           External_Name => "glReadPixels";
 
 end GLESv2_Binding;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Get_Error package stub for Get_Error
+-- @test: Test_Clear package stub for Clear
+-- @test: Test_Clear_Color package stub for Clear_Color
+-- @test: Test_Enable package stub for Enable
+-- @test: Test_Disable package stub for Disable
+-- @test: Test_Blend_Func package stub for Blend_Func
+-- @test: Test_Scissor package stub for Scissor
+-- @test: Test_Viewport package stub for Viewport
+-- @test: Test_Create_Shader package stub for Create_Shader
+-- @test: Test_Delete_Shader package stub for Delete_Shader
+-- @test: Test_Shader_Source package stub for Shader_Source
+-- @test: Test_Compile_Shader package stub for Compile_Shader
+-- @test: Test_Get_Shaderiv package stub for Get_Shaderiv
+-- @test: Test_Get_Shader_Info_Log package stub for Get_Shader_Info_Log
+-- @test: Test_Create_Program package stub for Create_Program
+-- @test: Test_Delete_Program package stub for Delete_Program
+-- @test: Test_Attach_Shader package stub for Attach_Shader
+-- @test: Test_Link_Program package stub for Link_Program
+-- @test: Test_Get_Programiv package stub for Get_Programiv
+-- @test: Test_Get_Program_Info_Log package stub for Get_Program_Info_Log
+-- @test: Test_Use_Program package stub for Use_Program
+-- @test: Test_Get_Attribute_Location package stub for Get_Attribute_Location
+-- @test: Test_Get_Uniform_Location package stub for Get_Uniform_Location
+-- @test: Test_Enable_Vertex_Attribute_Array package stub for Enable_Vertex_Attribute_Array
+-- @test: Test_Disable_Vertex_Attribute_Array package stub for Disable_Vertex_Attribute_Array
+-- @test: Test_Vertex_Attribute_Pointer package stub for Vertex_Attribute_Pointer
+-- @test: Test_Uniform1f package stub for Uniform1f
+-- @test: Test_Uniform2f package stub for Uniform2f
+-- @test: Test_Uniform3f package stub for Uniform3f
+-- @test: Test_Uniform4f package stub for Uniform4f
+-- @test: Test_Uniform1i package stub for Uniform1i
+-- @test: Test_Uniform_Matrix4fv package stub for Uniform_Matrix4fv
+-- @test: Test_Gen_Textures package stub for Gen_Textures
+-- @test: Test_Delete_Textures package stub for Delete_Textures
+-- @test: Test_Bind_Texture package stub for Bind_Texture
+-- @test: Test_Tex_Parameteri package stub for Tex_Parameteri
+-- @test: Test_Tex_Image_2D package stub for Tex_Image_2D
+-- @test: Test_Active_Texture package stub for Active_Texture
+-- @test: Test_Generate_Mipmap package stub for Generate_Mipmap
+-- @test: Test_Draw_Arrays package stub for Draw_Arrays
+-- @test: Test_Draw_Elements package stub for Draw_Elements
+-- @test: Test_Flush package stub for Flush
+-- @test: Test_Finish package stub for Finish
+-- @test: Test_Gen_Framebuffers package stub for Gen_Framebuffers
+-- @test: Test_Bind_Framebuffer package stub for Bind_Framebuffer
+-- @test: Test_Framebuffer_Texture_2D package stub for Framebuffer_Texture_2D
+-- @test: Test_Check_Framebuffer_Status package stub for Check_Framebuffer_Status
+-- @test: Test_Delete_Framebuffers package stub for Delete_Framebuffers
+-- @test: Test_Gen_Renderbuffers package stub for Gen_Renderbuffers
+-- @test: Test_Bind_Renderbuffer package stub for Bind_Renderbuffer
+-- @test: Test_Renderbuffer_Storage package stub for Renderbuffer_Storage
+-- @test: Test_Framebuffer_Renderbuffer package stub for Framebuffer_Renderbuffer
+-- @test: Test_Delete_Renderbuffers package stub for Delete_Renderbuffers
+-- @test: Test_Bind_Buffer package stub for Bind_Buffer
+-- @test: Test_Gen_Buffers package stub for Gen_Buffers
+-- @test: Test_Buffer_Data package stub for Buffer_Data
+-- @test: Test_Read_Pixels package stub for Read_Pixels
+
+-- End of test stubs

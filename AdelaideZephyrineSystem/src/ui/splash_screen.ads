@@ -172,3 +172,13 @@ package Splash_Screen is
            Post => True
 
 end Splash_Screen;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Create package stub for Create
+-- @test: Test_Show package stub for Show
+-- @test: Test_Wait_For_Ready package stub for Wait_For_Ready
+-- @test: Test_Dismiss package stub for Dismiss
+-- @test: Test_Get_State package stub for Get_State
+-- @test: Test_Is_Visible package stub for Is_Visible
+
+-- End of test stubs

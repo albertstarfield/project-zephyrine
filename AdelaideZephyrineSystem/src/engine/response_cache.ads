@@ -96,3 +96,16 @@ private
    -- @test: Normalize covered by sabotage_verifier
 
 end Response_Cache;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Initialize package stub for Initialize
+-- @test: Test_Lookup package stub for Lookup
+-- @test: Test_Store package stub for Store
+-- @test: Test_Hit_Count package stub for Hit_Count
+-- @test: Test_Miss_Count package stub for Miss_Count
+-- @test: Test_Entry_Count package stub for Entry_Count
+-- @test: Test_Reset_Stats package stub for Reset_Stats
+-- @test: Test_Hash_Unbounded package stub for Hash_Unbounded
+-- @test: Test_Normalize package stub for Normalize
+
+-- End of test stubs

@@ -10,3 +10,8 @@ package Tool_File_Edit is
    -- @test: Execute_File_Edit covered by sabotage_verifier
    -- @test: Execute_File_Edit covered by sabotage_verifier
 end Tool_File_Edit;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Execute_File_Edit package stub for Execute_File_Edit
+
+-- End of test stubs

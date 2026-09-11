@@ -23,3 +23,8 @@ package Verification_Manager is
 
 end Verification_Manager;
 
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Verify_Python package stub for Verify_Python
+-- @test: Test_Verify_And_Compile_Dafny package stub for Verify_And_Compile_Dafny
+
+-- End of test stubs

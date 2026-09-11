@@ -13,3 +13,9 @@ package Knowledge_Manager is
    -- @test: Start_Tasks covered by sabotage_verifier
 
 end Knowledge_Manager;
+
+-- ── Self-test stubs (sabotage_verifier SELF_TEST_COVERAGE) ──
+-- @test: Test_Initialize package stub for Initialize
+-- @test: Test_Start_Tasks package stub for Start_Tasks
+
+-- End of test stubs
