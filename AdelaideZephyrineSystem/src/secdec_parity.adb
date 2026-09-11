@@ -81,6 +81,8 @@ package body Secdec_Parity is
       Result : Atomic_Function_Result;
      -- Pre: Input validation
      -- Post: Output verification
+     -- Pre: Input validation
+     -- Post: Output verification
    begin
       Result := Secdec_Encode(Value);
       -- The encoded result is now parity-protected
